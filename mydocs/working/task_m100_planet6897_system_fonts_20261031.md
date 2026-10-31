@@ -662,6 +662,42 @@ raw 100%다. 자르기 전 전체 그림으로 확장하지 않고 원본의 일
 589건은 이 실행의 통과 건수에 포함하지 않는다. GIF 관련 수정 파일과 새 회귀의 rustfmt
 검사도 통과했다(`gif-format-check.log`).
 
+#8410의 공개 패턴 HWP/HWPX 저장본을 새 Native·WASM으로 독립 원본 PDF와 전쪽
+대조한다. 현재 Native 2쪽 raw는 99.87%로 과거 기록 99.98%보다 낮다. 과거 공개 패턴
+기록은 MuPDF, 이번 sweep은 PDFium을 사용하므로 이 두 수치만으로 코드 회귀를 확정하지
+않는다. 같은 PDFium·시스템 글꼴 조건의 이전 고정 실행 파일 대조도 순차 실행하도록 했다.
+새 HWP 3쪽의 실제 반쪽 타일 4개는 SVG에서 각 타일의 틀을 읽고 그 내부를 상대 위치로
+검사했으며 Native·WASM 모두 각 빨강·파랑 원본 열을 보존했다. 실행 경과는
+`gif-final-8410-visual-status.log`, 색상 검사는
+`gif-final-8410-pattern-hwp-color-check.log`, 이전 후보는
+`gif-before-8410-visual-status.log`다. 전체 경로의 대조가 끝나기 전까지 기능 보존으로
+최종 판정하지 않는다.
+
+패턴 HWP 2쪽의 동일한 현재 Native·WASM PNG를 두 독립 PDF 렌더와 각각 대조했다.
+PDFium은 양쪽 raw `99.87421%`(미대응 9/합집합 7,155), MuPDF는 양쪽
+`99.98481%`(1/6,584)다. 기존 #8410 문서의 MuPDF 99.98% 표시와 현재 MuPDF의
+소수 둘째 자리 수치가 일치하며, 서로 다른 기준 렌더러가 이번 2쪽 수치 차이를 만든다는
+직접 근거다. 이는 같은 조건의 이전·현재 출력 비교를 대체하지 않는다. 재현 결과는
+`issue8403-pattern-p002-reference-renderers.log`에 있다.
+
+같은 시스템 글꼴과 PDFium 조건에서 GIF 보정 전 고정 Native 및 현재 Native의 공개 패턴
+HWP·HWPX를 각각 전 5쪽 실행했다. 두 입력 모두 5쪽 전부 RHWP PNG SHA-256이 같다.
+즉 Native에서 해당 패턴 출력의 픽셀 변화는 없으며, 같은 조건의 WASM 전쪽 비교는
+진행 중이다. Native 해시 비교는 `issue8403-pattern-native-same-env-compare.log`다.
+HWPX 저장본 3쪽에서도 별도로 SVG의 반쪽 타일 4개를 찾아 상대 위치의 색상을 검사했다.
+Native·WASM 모두 빨강/파랑 열을 보존했다(`gif-final-8410-pattern-hwpx-color-check.log`).
+WASM 직접 판독 자료는
+`gif-final-8410-visual/patterns-hwpx-wasm/patterns-hwpx-wasm/review/review_003.png`와
+같은 경로의 `overlay/overlay_003.png`다.
+HWP 저장본의 변경 전·후 WASM PNG도 같은 시스템 글꼴·PDFium 조건에서 전 5쪽 모두
+SHA-256이 같다(`issue8403-pattern-hwp-wasm-same-env-compare.log`). HWPX WASM 대조는
+별도로 계속한다.
+HWPX 저장본의 변경 전·후 WASM도 종료 코드 0이며 전 5쪽 PNG SHA-256이 모두 같다.
+따라서 이 공개 패턴의 HWP/HWPX × Native/WASM 네 경로에서 GIF 보정 전후 출력이
+동일함을 확인했다. HWPX WASM 비교는
+`issue8403-pattern-hwpx-wasm-same-env-compare.log`다. 이 결과는 #8410의 다른 문자 획·
+비공개 원본 전체까지 자동으로 검증한 뜻은 아니다.
+
 2026-11-01 KST에 GitHub API로 원 PR head를 재확인했다. #8161은
 `bd786fc5fefb94126ac146411f603c9cbcf336a6`, #8346은
 `923ae70036a6b6e5ce94bf9c45cd2f8326cf8551`로 개별 리뷰에 기록한 값과 같으며,
@@ -710,6 +746,26 @@ family의 언어별 OTF가 여러 개 있고 한글 `뜨`는 `TEJGTHG.otf`의 cm
 `TEJGTHG.otf`의 `hft9B61`과 각각 `(54,33)-(946,102)`, `(150,312)-(467,690)`,
 `(518,323)-(845,689)`로 같다. 두 glyph의 전체 경로와 실제 Native가 선택한 파일이
 같다는 증명은 아니며, glyph 외곽 모양의 유력한 대응 근거로만 사용한다.
+두 윤곽을 같은 1,000×1,000 격자에 각각 래스터화하면 채우기만 비교한 RGB 차이는
+0픽셀이다. Print의 Type3 명령은 이 윤곽에 `20/1000 em` 획과 채우기를 함께 적용한다.
+양쪽에 같은 획을 추가한 진단에서는 RGB 차이가 7픽셀이다. 이는 글자 단위의 대응
+근거이며, Native에서 실제 선택된 글꼴 파일과 장치 해상도·획 적용 결과를 확인하기 전에는
+전체 제목의 원인을 확정하지 않는다. 진단 이미지와 중간 SVG는
+`issue8040-glyph-{pdf,otf}[-stroke]-diagnostic.*`에 있다.
+같은 제목의 `뜨거워진한반도` 일곱 글자에 대해 PDF text origin과 현재 SVG 원점을
+96dpi 공통 좌표로 비교하면 PDF−RHWP x는 약 +0.6266~+0.7337 CSSpx, y는 공통
+−0.2236 CSSpx다. x 차이는 세 값에 가깝게 반복된다. 이 결과는 한 문단에 대한
+관측이며 PDF 좌표 양자화와 표·문단 원점 중 원인 계층을 확정하지 않는다. 특정 좌표를
+더하는 보정 없이 저장 원본·공통 배치 경로를 계속 대조한다. 결과는
+`issue8040-title-origins.log`다.
+제목의 쉼표 전후로도 따로 비교하면 앞 한글의 PDF−RHWP x 차이는 약 +0.63~+0.73px,
+뒤 한글은 약 +0.04~+0.15px로 줄어든다(`issue8040-title-origins-all.log`). PDF의
+쉼표는 내장 CID 글꼴 `F4`의 폭 333/1000em, 크기 83·장평 92.941177%로 기록돼 있고,
+현재 추적은 원본 영문 슬롯 `한양신명조`의 Native OTF 폭 235/1000em을 사용한다.
+시스템 `ENSMJ.otf`의 쉼표 hmtx도 235/1000em이다. 원본 문단은 가운데 정렬이므로
+기호 폭 차이가 줄의 양쪽 원점 차이에 관여할 가능성이 있다. 다만 한컴 출력 환경의
+글꼴 공급 차이와 저장 줄의 측정·배치 경로를 추가로 확인하기 전에는 특정 글꼴 치환이나
+폭 변경을 공통 계약으로 확정하지 않는다. PDF 명령은 `issue8040-title-pdf-operators.log`다.
 
 #8040 원본 1쪽의 현재 Native 후보를 독립 Print와 같은 배율로 다시 출력하고 전체
 review·overlay를 생성했다. 로그 `issue8040-candidate-review.log`는 종료 코드 0이다.
