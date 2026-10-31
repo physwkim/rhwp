@@ -1,4 +1,5 @@
 //! 검사 유형: 관계형.
+//! 주석 갱신: 2026-11-01T00:00:47+09:00; 직전 파일 커밋: 2026-10-31T23:21:28+09:00 (53c10a41131c500290fa5d6ad6bcb9beaaaa2f7c).
 //! 2026-10-31 측정 raw(96dpi): samples/issue8282/square_textbox_long_host.hwpx 1쪽
 //! Native 91.96% · fresh WASM 92.15% — 기준 pdf/issue8282/square_textbox_long_host-2024.pdf
 //! (한/글 2024 13.0.0.564 Print). 남은 차이였던 글상자 세로 위치(바깥 여백 283)는 #8399 가
