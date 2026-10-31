@@ -179,15 +179,24 @@ fn placement(core: &DocumentCore) -> Placement {
     }
 }
 
+fn assert_reflow_host(core: &DocumentCore, label: &str) {
+    let host = &core.document().sections[0].paragraphs[0];
+    // #8399 이후 저장 줄이 없더라도 재열기 과정에서 밴드 소유자가 합성 줄을 발행한다.
+    // 저장 줄과 혼동하지 않도록 출처와 태그를 확인하고, 아래에서 실제 배치를 대조한다.
+    assert!(
+        host.line_segs.is_empty()
+            || (host.layout_float_band
+                && host.line_segs.iter().all(|line| {
+                    line.tag & rhwp::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY != 0
+                })),
+        "{label}: HWPX host 줄은 저장 줄이 없거나 밴드 소유자가 생성한 합성 줄이어야 한다"
+    );
+}
+
 fn reopen_hwpx(core: &DocumentCore) -> DocumentCore {
     let reopened =
         DocumentCore::from_bytes(&core.export_hwpx_native().expect("hwpx")).expect("reopen");
-    assert!(
-        reopened.document().sections[0].paragraphs[0]
-            .line_segs
-            .is_empty(),
-        "전제: HWPX 저장본의 host 문단은 저장 줄 없이 재조판된다"
-    );
+    assert_reflow_host(&reopened, "다시 연 문서");
     reopened
 }
 
@@ -334,12 +343,7 @@ fn committed_fixtures_match_the_in_memory_reopen() {
             &std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).expect("fixture"),
         )
         .expect("parse fixture");
-        assert!(
-            fixture.document().sections[0].paragraphs[0]
-                .line_segs
-                .is_empty(),
-            "{path}: host 문단은 저장 줄이 없다"
-        );
+        assert_reflow_host(&fixture, path);
         assert_same_placement(
             path,
             &placement(&reopen_hwpx(&edited(body, horz, vert, picture_float))),
