@@ -46,6 +46,9 @@ fn inflate_script_stream(bytes: &[u8]) -> Result<Vec<u8>, HwpError> {
         .take((MAX_SCRIPT_BYTES + 1) as u64)
         .read_to_end(&mut raw)
         .map_err(|_| invalid())?;
+    if raw.len() > MAX_SCRIPT_BYTES {
+        return Err(invalid());
+    }
     Ok(raw)
 }
 
@@ -53,27 +56,27 @@ fn inflate_script_stream(bytes: &[u8]) -> Result<Vec<u8>, HwpError> {
 ///
 /// 원본 형태(`script_stream_compressed`)와 대상 비트가 같거나 배포용 봉투면 `None`(그대로 쓴다).
 /// 다르면 풀거나 압축한 바이트를 돌려준다 — HWPX 출처 문서를 비압축 HWP 로 쓰면 합성 압축형
-/// 스크립트가 비압축 파일 안에 그대로 실려 다시 읽을 때 원문으로 해석된다. 풀 수 없는 원본은
-/// 바이트를 보존하도록 `None` 이다.
+/// 스크립트가 비압축 파일 안에 그대로 실려 다시 읽을 때 원문으로 해석된다. 변환할 수 없는
+/// 원본은 저장을 실패시켜 잘못된 압축 형식이나 잘린 스크립트를 기록하지 않는다.
 pub(crate) fn script_stream_for_hwp(
     document: &Document,
     bytes: &[u8],
     target_compressed: bool,
-) -> Option<Vec<u8>> {
+) -> Result<Option<Vec<u8>>, HwpError> {
     if bytes.is_empty()
         || script_stream_compressed(document) == target_compressed
         || is_distribution_envelope(bytes)
     {
-        return None;
+        return Ok(None);
     }
     if target_compressed {
         use std::io::Write;
         let mut encoder =
             flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
-        encoder.write_all(bytes).ok()?;
-        encoder.finish().ok()
+        encoder.write_all(bytes).map_err(|_| invalid())?;
+        Ok(Some(encoder.finish().map_err(|_| invalid())?))
     } else {
-        inflate_script_stream(bytes).ok()
+        Ok(Some(inflate_script_stream(bytes)?))
     }
 }
 
@@ -133,5 +136,29 @@ pub(crate) fn scripts(document: &Document) -> Result<(String, String), HwpError>
     ) {
         (Some(header), Some(source)) => Ok((utf16(header)?, utf16(source)?)),
         _ => script_sources_from_streams(document),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{inflate_script_stream, MAX_SCRIPT_BYTES};
+    use std::io::Write;
+
+    #[test]
+    fn script_inflation_preserves_limit_and_rejects_excess() {
+        for size in [MAX_SCRIPT_BYTES, MAX_SCRIPT_BYTES + 1] {
+            let source = vec![b'a'; size];
+            let mut encoder = flate2::write::DeflateEncoder::new(
+                Vec::new(),
+                flate2::Compression::default(),
+            );
+            encoder.write_all(&source).unwrap();
+            let result = inflate_script_stream(&encoder.finish().unwrap());
+            if size == MAX_SCRIPT_BYTES {
+                assert_eq!(result.unwrap(), source);
+            } else {
+                assert!(result.is_err(), "상한을 넘은 스크립트는 잘라 저장하지 않는다");
+            }
+        }
     }
 }

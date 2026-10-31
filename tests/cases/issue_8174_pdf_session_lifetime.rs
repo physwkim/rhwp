@@ -723,7 +723,16 @@ fn attach_text_clip(core: &mut rhwp::DocumentCore) {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), target_pointer_width = "64"))]
-fn exercise_metadata_save_limit(hwp: bool, decoded_limit: usize) {
+fn exercise_metadata_save_limit(hwp: bool) {
+    let mut baseline = PdfImportSession::new(PdfImportPolicy::default()).unwrap();
+    let mut plain = baseline.open(PDF, &Default::default()).unwrap();
+    let opened_bytes = baseline.resource_usage().decoded_bytes;
+    if hwp {
+        baseline.export_hwp(&mut plain, 1024 * 1024).unwrap();
+    } else {
+        baseline.export_hwpx(&mut plain, 1024 * 1024).unwrap();
+    }
+    let plain_save_bytes = baseline.resource_usage().decoded_bytes;
     let mut healthy = PdfImportSession::new(PdfImportPolicy::default()).unwrap();
     let mut original = healthy.open(PDF, &Default::default()).unwrap();
     // Trusted host edits are legal between open and the first bounded save.
@@ -753,10 +762,12 @@ fn exercise_metadata_save_limit(hwp: bool, decoded_limit: usize) {
     }
     .unwrap();
     assert_eq!(healthy_bytes, expected.bytes());
+    let metadata_save_bytes = healthy.resource_usage().decoded_bytes;
+    assert!(plain_save_bytes >= opened_bytes);
+    assert!(metadata_save_bytes > plain_save_bytes, "메타데이터 저장은 추가 예산을 소비해야 한다");
     let mut policy = PdfImportPolicy::default();
-    // S54's measured Native64 complete-save work plus 64 bytes. This remains
-    // an input-policy boundary; it does not pin today's exact counter value.
-    policy.backend.decoded_bytes = decoded_limit as u64;
+    // 일반 저장은 허용하되 메타데이터가 든 저장은 거부하는 실제 경계를 고른다.
+    policy.backend.decoded_bytes = plain_save_bytes;
     let mut limited = PdfImportSession::new(policy).unwrap();
     let mut core = limited.open(PDF, &Default::default()).unwrap();
     attach_text_clip(&mut core);
@@ -797,13 +808,13 @@ fn exercise_metadata_save_limit(hwp: bool, decoded_limit: usize) {
 #[test]
 #[cfg(all(not(target_arch = "wasm32"), target_pointer_width = "64"))]
 fn first_hwp_metadata_save_shares_the_request_and_recovers() {
-    exercise_metadata_save_limit(true, 1_690_710 + 64);
+    exercise_metadata_save_limit(true);
 }
 
 #[test]
 #[cfg(all(not(target_arch = "wasm32"), target_pointer_width = "64"))]
 fn first_hwpx_metadata_save_shares_the_request_and_recovers() {
-    exercise_metadata_save_limit(false, 2_049_973 + 64);
+    exercise_metadata_save_limit(false);
 }
 
 #[cfg(all(not(target_arch = "wasm32"), target_pointer_width = "64"))]

@@ -312,6 +312,7 @@ where
         if path.trim_start_matches('/') == "Scripts/DefaultJScript" {
             if let Some(converted) =
                 crate::model::form_script::script_stream_for_hwp(doc, bytes, compressed)
+                    .map_err(|error| SerializeError::UnsupportedInput(error.to_string()))?
             {
                 *bytes = converted;
             }
