@@ -131,6 +131,12 @@ RHWP 조판 개선으로 바꾸어 보고하지 않는다. 실루엣 임계값·
 저장한다. compare·overlay·review PNG와 상세 구조 분석은 생성하지 않는다.
 기본 경로는 비교용 Native/WASM PNG와 PDF raster를 생성하며, 이미 있는 PNG는
 `--png-pair`로 재사용해 원문 export·raster 작업도 생략할 수 있다.
+실행이 중단되면 같은 명령에 `--resume`을 추가해 이어간다. Native와 fresh WASM은
+완료한 쪽 묶음의 입력·실행 환경과 산출물 해시를 검사한 뒤 재사용하며, 완료되지 않은
+묶음만 다시 출력한다. `--png-pair`는 완료한 쪽의 PNG 해시와 계산 환경을 검사해
+미완료 쪽만 계산한다. 원본·PDF·실행 파일·글꼴·코드가 바뀌면 기존 결과를 섞지 않고
+재개를 거부한다. 중간 상태는 `run_state=incomplete`로 남고 최종 TSV는 전부 완료한 뒤
+기록된다. 새로운 조건으로 측정할 때는 `--resume` 없이 새 출력 경로를 사용한다.
 
 ```bash
 python3 scripts/visual_sweep.py --silhouette-only \

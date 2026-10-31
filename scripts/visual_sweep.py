@@ -1557,8 +1557,8 @@ def render_target(
     if dpi <= 0:
         raise SystemExit(f"DPI는 양수여야 합니다: {dpi}")
     if exclusion_evidence is not None:
-        if dpi != 96 or not silhouette_only or resume:
-            raise SystemExit("연결 그림 제외는 96dpi 실루엣 전용이며 --resume을 사용할 수 없습니다")
+        if dpi != 96 or not silhouette_only:
+            raise SystemExit("연결 그림 제외는 96dpi 실루엣 전용입니다")
         for label, actual in (("source", root / target.hwp), ("pdf", root / target.pdf)):
             if sha256_file(actual) != exclusion_evidence[label]["sha256"]:
                 raise SystemExit(f"연결 그림 제외 증거의 {label}가 실제 대상과 다릅니다")
@@ -1738,7 +1738,10 @@ def render_target(
     if silhouette_only:
         all_pdf_pngs = sorted(pdf_png_dir.glob("*.png"), key=page_num)
         if exclusion_evidence is not None:
-            validate_linked_image_regions(all_tree_paths, exclusion_evidence["regions"])
+            selected_set = set(selected_pages) if selected_pages is not None else None
+            regions = [entry for entry in exclusion_evidence["regions"]
+                       if selected_set is None or entry["page"] in selected_set]
+            validate_linked_image_regions(all_tree_paths, regions)
         sources = select_source_page_paths(
             all_svg_paths, all_tree_paths, all_pdf_pngs, selected_pages
         )
@@ -1749,7 +1752,8 @@ def render_target(
             pairs.append((page, rhwp_png_dir / f"rhwp_{page:03d}.png", pdf_path))
         manifest = write_silhouette_tsv(pairs, base, target.key, document_counts=document_counts,
                                         workers=page_workers, excluded_regions=excluded_regions,
-                                        exclusion_evidence=exclusion_evidence)
+                                        exclusion_evidence=exclusion_evidence,
+                                        resume=resume and (base / "silhouette-metrics").is_dir())
         manifest["provenance"] = provenance
         manifest["exported_svg_pages"] = len(list(svg_dir.glob("*.svg")))
         manifest["exported_png_source_pages"] = len(all_svg_paths) if png_module else 0
@@ -5499,20 +5503,81 @@ def write_silhouette_tsv(
     *, document_counts: dict[str, int] | None = None, workers: int = 1,
     excluded_regions: dict[int, list[tuple[int, int, int, int]]] | None = None,
     exclusion_evidence: dict[str, object] | None = None,
+    resume: bool = False,
 ) -> dict[str, object]:
     """이미지 증적을 새로 만들지 않고 같은 2px 보조 지표와 입력 해시만 저장한다."""
     if not pairs:
         raise SystemExit("실루엣 비교 입력이 없습니다.")
     out_dir.mkdir(parents=True, exist_ok=True)
     tsv = out_dir / "silhouette.tsv"
+    checkpoint_dir = out_dir / "silhouette-metrics"
+    if not resume:
+        clean_dir(checkpoint_dir)
+    else:
+        if not checkpoint_dir.is_dir():
+            raise SystemExit(f"실루엣 쪽 체크포인트가 없습니다: {checkpoint_dir}")
+    checkpoint_identity = {
+        "key": key,
+        "pages": [page for page, _, _ in pairs],
+        "exclusion_evidence": exclusion_evidence.get("sha256") if exclusion_evidence else None,
+    }
+    identity_path = checkpoint_dir / "manifest.json"
+    if resume:
+        if not identity_path.is_file() or load_json_object(identity_path, "실루엣 쪽 목록") != checkpoint_identity:
+            raise SystemExit("실루엣 재개 대상의 쪽 목록 또는 제외 증거가 바뀌었습니다")
+    else:
+        write_json_atomic(identity_path, checkpoint_identity)
+    tsv.unlink(missing_ok=True)
+    write_json_atomic(out_dir / "silhouette_manifest.json", {
+        "key": key, "mode": "silhouette_only", "run_state": "incomplete",
+        "pr_review_gate": {"status": "not_evaluated", "reason": "실루엣 계산 진행 중"},
+    })
     metrics = []
     inputs = []
-    with tsv.open("w", encoding="utf-8") as stream:
+    temporary_tsv = out_dir / "silhouette.tsv.tmp"
+    with temporary_tsv.open("w", encoding="utf-8") as stream:
         header = "page\ttolerant_content_match_percent\tbelow_90\tsilhouette_raw_match_percent\tsilhouette_boundary_reconciled_pixels"
         stream.write(header + ("\texcluded_linked_image_regions" if exclusion_evidence is not None else "") + "\n")
         compare_pairs = [(page, rhwp, pdf, (excluded_regions or {}).get(page, []))
                          for page, rhwp, pdf in pairs] if excluded_regions else pairs
-        for page, details, inputs_for_page in ordered_page_map(silhouette_pair_metrics, compare_pairs, workers):
+        producer = {
+            "sweep": sha256_file(Path(__file__)),
+            "image_helpers": sha256_file(Path(__file__).with_name("visual_sweep_images.py")),
+            "exclusion_evidence": exclusion_evidence.get("sha256") if exclusion_evidence else None,
+            "image_decoding": image_decoding_provenance(),
+        }
+        cached = {}
+        missing = []
+        for pair in compare_pairs:
+            page, rhwp_path, pdf_path = pair[:3]
+            path = checkpoint_dir / f"p{page:06d}.json"
+            identity = {
+                "rhwp_sha256": sha256_file(rhwp_path), "pdf_sha256": sha256_file(pdf_path),
+                "excluded": [list(rect) for rect in (pair[3] if len(pair) == 4 else [])],
+                "method": SILHOUETTE_METHOD, "producer": producer,
+            }
+            if resume and path.exists():
+                saved = load_json_object(path, "실루엣 쪽 체크포인트")
+                if saved.get("identity") != identity:
+                    raise SystemExit(f"실루엣 p{page} 입력 또는 계산 환경이 바뀌었습니다")
+                saved_input = saved["inputs"]
+                saved_input.update({"rhwp_png": str(rhwp_path), "pdf_png": str(pdf_path)})
+                cached[page] = (page, saved["details"], saved_input)
+            else:
+                missing.append(pair)
+        for page, details, inputs_for_page in ordered_page_map(silhouette_pair_metrics, missing, workers):
+            pair = next(item for item in compare_pairs if item[0] == page)
+            identity = {
+                "rhwp_sha256": inputs_for_page["rhwp_sha256"], "pdf_sha256": inputs_for_page["pdf_sha256"],
+                "excluded": [list(rect) for rect in (pair[3] if len(pair) == 4 else [])],
+                "method": SILHOUETTE_METHOD, "producer": producer,
+            }
+            write_json_atomic(checkpoint_dir / f"p{page:06d}.json", {
+                "identity": identity, "details": details, "inputs": inputs_for_page,
+            })
+            cached[page] = (page, details, inputs_for_page)
+        for page in sorted(cached):
+            _, details, inputs_for_page = cached[page]
             value = details["tolerant_content_match_percent"]
             metrics.append({"page": page, **details})
             stream.write(f"{page}\t{value:.2f}\t{int(details['silhouette_raw_match_percent'] < PR_REVIEW_MIN_RAW_MATCH_PERCENT)}"
@@ -5520,6 +5585,7 @@ def write_silhouette_tsv(
                          f"\t{details['silhouette_boundary_reconciled_pixels']}"
                          + (f"\t{len((excluded_regions or {}).get(page, []))}" if exclusion_evidence is not None else "") + "\n")
             inputs.append(inputs_for_page)
+    temporary_tsv.replace(tsv)
     gate = pr_review_gate(metrics, font_mismatch_evidence=None, document_page_counts=document_counts)
     if gate["status"] == "passed":
         gate = {**gate, "status": "not_evaluated", "reason": "실루엣 보조값만 산출; 직접 시각·각주·본문 소유 검토 필요"}
@@ -5779,8 +5845,6 @@ def main() -> None:
         raise SystemExit("--pixel-diff-threshold는 0 이상 255 이하로 지정해야 합니다.")
     selected_pages = parse_page_selection(args.page, args.pages)
 
-    if args.silhouette_only and args.resume:
-        parser.error("실루엣 전용 모드는 일반 PNG checkpoint의 --resume을 사용하지 않습니다.")
     if args.silhouette_only and args.font_mismatch_evidence:
         parser.error("TSV는 원 점수를 유지합니다. 글꼴 예외 증거는 재검토 후 일반 PNG 모드에 지정하세요.")
     if args.linked_image_exclusions and not args.silhouette_only:
@@ -5794,7 +5858,8 @@ def main() -> None:
         exclusions, evidence = (load_linked_image_exclusions(args.linked_image_exclusions)
                                 if args.linked_image_exclusions else ({}, None))
         manifest = write_silhouette_tsv(pairs, Path(args.out), args.key or "png-pair", workers=args.page_workers,
-                                        excluded_regions=exclusions, exclusion_evidence=evidence)
+                                        excluded_regions=exclusions, exclusion_evidence=evidence,
+                                        resume=args.resume)
         if manifest["pr_review_gate"]["status"] == "re_review_required":
             raise SystemExit("실루엣 보조값 90% 미만: TSV를 확인하고 직접 검토하세요.")
         return
@@ -5827,7 +5892,32 @@ def main() -> None:
     out_root.mkdir(parents=True, exist_ok=True)
     re_review_targets: list[str] = []
     for target in selected:
-        manifest = render_target(
+        if args.silhouette_only:
+            try:
+                from scripts.visual_sweep_resume import render_silhouette_resumable
+            except ModuleNotFoundError:
+                from visual_sweep_resume import render_silhouette_resumable
+            def render(*args, **kwargs):
+                return render_silhouette_resumable(sys.modules[__name__], *args, **kwargs)
+        else:
+            render = render_target
+        options = dict(
+            svg_rasterizer=args.svg_rasterizer,
+            wasm_pkg=args.wasm_pkg,
+            font_environment=args.font_environment,
+            observed_font_receipt=args.observed_font_receipt,
+            embed_fonts=args.embed_fonts,
+            font_paths=args.font_path,
+            font_mismatch_evidence=args.font_mismatch_evidence,
+            excluded_regions=exclusions,
+            exclusion_evidence=evidence,
+            compat=args.compat,
+            page_workers=args.page_workers,
+            rasterizer=args.rasterizer,
+        )
+        if not args.silhouette_only:
+            options['silhouette_only'] = False
+        manifest = render(
             root,
             target,
             out_root,
@@ -5836,19 +5926,7 @@ def main() -> None:
             args.pixel_diff_threshold,
             selected_pages,
             resume=args.resume,
-            svg_rasterizer=args.svg_rasterizer,
-            wasm_pkg=args.wasm_pkg,
-            font_environment=args.font_environment,
-            observed_font_receipt=args.observed_font_receipt,
-            embed_fonts=args.embed_fonts,
-            font_paths=args.font_path,
-            font_mismatch_evidence=args.font_mismatch_evidence,
-            silhouette_only=args.silhouette_only,
-            excluded_regions=exclusions,
-            exclusion_evidence=evidence,
-            compat=args.compat,
-            page_workers=args.page_workers,
-            rasterizer=args.rasterizer,
+            **options,
         )
         gate = manifest.get("pr_review_gate")
         if isinstance(gate, dict) and gate.get("status") == "re_review_required":
