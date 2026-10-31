@@ -1,0 +1,48 @@
+# PR #8405 리뷰 — fix(layout): 어울림 글상자 바깥 상자로 본문 줄을 깎는다 (#8399)
+
+## 최종 판정
+
+**머지 보류 — 재체리픽 후보의 검증 진행 중.** 최신 base의 기능 보존, 관련 검증과 기존 정밀 TSV 하락 해소를 완료한 뒤 다시 판정한다.
+
+## 접수와 적용
+
+- 원 PR: [#8405](https://github.com/edwardkim/rhwp/pull/8405), 작성자 `planet6897`, reviewer `jangster77`.
+- 원 PR head 조회값: `df932ebcf6144b468bebab8f5a2f2d2379807a8a`. 조회 시 원 PR head와 마지막 체리픽 원본이 일치한다.
+- 마지막 적용 원본: `df932ebcf6144b468bebab8f5a2f2d2379807a8a`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
+- 관련 이슈: [#8399](https://github.com/edwardkim/rhwp/issues/8399).
+- 선행 PR: #8402.
+
+후속 `e1f03ffbb3`은 Python 테스트 준비, `af175315e7`과 `e920cba6b0`은 회귀 검사 주석, `a63bb719de`는 검증 경과를 기록했다. `5d1294811b`은 전체 그림의 잘림 오판을 보정했다. `e1b8ab0f54`, `d6fe30c3ad`, `0897582f6c`, `8c4eca265e`에 Native 진단, #8410 집중 6건 통과와 글꼴 대조를 기록했으며 새 코드의 전쪽 출력 검증이 필요하다.
+
+## 변경 주장과 검토 관점
+
+비TAC 어울림 글상자의 바깥 여백 상자를 본문 줄 배제와 개체 배치에 함께 사용한다.
+선행 #8402와 호스트·후속 문단의 포함, 겹침 및 외곽 위치를 확인한다.
+
+## 체리픽과 보정
+
+- 원본 `df7fec9af6114d680955bc0d28d0330e0e6cb124` → 통합 `a540a4cc4aa7aa0e241e64ed9be2d4d13a4ad00f`.
+- 원본 `e5b82ad49a4b11063d05eb258c7b54f172411602` → 통합 `22851c438d58697237d66fe52ff63ceb8bd09348`.
+- 원본 `1f863bd2afcdf097fdf6f5dd39865b86cdba0a32` → 통합 `53c10a41131c500290fa5d6ad6bcb9beaaaa2f7c`.
+- 원본 `df932ebcf6144b468bebab8f5a2f2d2379807a8a` → 통합 `a24ba81ef81b7e5fca5599d559209a7bfa888a74`.
+
+`src/renderer/composer.rs`와 `line_breaking.rs`의 충돌은 이전 보정 당시와 양쪽 Git blob이 동일해 기존 해결본을 재사용했다.
+
+기존 통합의 메인터너 보정 `3401b50256`을 새 후보의 `0e4bd3678e`로 다시 적용했다. 앞뒤 개체 여백 중복과 스크립트 압축 상태 복구는 해당 코드 경로별로 재검증한다.
+
+## 검증과 증거
+
+이전 통합 후보의 최소 글꼴 전체 회귀 로그에서 이 PR 관련 다음 모듈의 실행을 확인했다. 새 base 후보의 재실행 결과는 이 값으로 대신하지 않는다.
+- [`issue_8282_hwpx_reopen_square_shape_tac_picture.rs`](../../../tests/cases/issue_8282_hwpx_reopen_square_shape_tac_picture.rs): 이전 실행 3건 통과, 0건 실패, 0건 건너뜀.
+- [`issue_8399_square_shape_band.rs`](../../../tests/cases/issue_8399_square_shape_band.rs): 이전 실행 8건 통과, 0건 실패, 0건 건너뜀.
+
+검토 후보에 포함된 입력 바이트를 Git blob과 대조했다. 아래 자료는 원 PR의 제출 증거이며 새 후보의 실행 결과를 뜻하지 않는다.
+- [`square_textbox_long_host-2024.pdf`](../../../pdf/issue8282/square_textbox_long_host-2024.pdf) — SHA-256 `55148684967f4795f81b887ffb6b22fabf26dcc4bfd0cbffaf370cb084aa4860`.
+- [`A-hwp-2024.pdf`](../../../pdf/issue8399/A-hwp-2024.pdf) — SHA-256 `45777e3678de4f0558867697c5bf2f71535c4b71bf9f70955be71367421c2e59`.
+- [`A-hwpx-2024.pdf`](../../../pdf/issue8399/A-hwpx-2024.pdf) — SHA-256 `0450bebb11625b1acbcc1ce06ff36a12474a76b3a52b6ac143b10b000226633a`.
+
+기존 생성 목록으로 최소 글꼴 회귀 12,320건 통과·45건 건너뜀을 확인했다. 생성 목록에서 누락된 #8410 두 모듈의 6건을 목록 재작성 후 같은 환경에서 별도로 실행해 모두 통과했다. 두 실행을 구분하며 한 번의 전체 실행으로 기록하지 않는다.
+
+2026-11-01 고정 후보의 #8389·#8397 전쪽 정밀 대조에서 2,153행 중 Native 12행, WASM 8행이 공개 기준보다 낮았다. 이 수치는 이후 GIF·Canvas 보정 전 결과이며 최종 후보의 재검증 결과가 아니다. #7905 3쪽은 GIF 오른쪽 경계 누락, sample16 35쪽 WASM은 메타파일 내부의 미대응 3픽셀이 확인됐다. #8040 두 원본은 Native·WASM 전쪽이 90% 이상이나 Native 정밀 기준 하락이 남는다. 진행과 근거는 [작업 기록](../../working/task_m100_planet6897_system_fonts_20261031.md)을 따른다. 하락 보정과 전쪽 대조, 각 PR의 독립 Print·Native/fresh WASM 및 직접 판독을 완료해야 한다. #8410·#8412의 새 base 기능도 별도로 보존 검증한다.
+
+원 PR의 최신 head·required check와 통합 후보의 새 검증 결과를 확인하기 전에는 승인이나 merge를 진행하지 않는다.
