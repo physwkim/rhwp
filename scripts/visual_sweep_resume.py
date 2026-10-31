@@ -5,7 +5,37 @@ import os
 import shutil
 from pathlib import Path
 
-BATCH_PAGES = 24
+BATCH_PAGES = 64
+
+
+def prepare_target_plan(vs, root, out_root, targets, selected_pages, *, resume,
+                        rhwp_bin, dpi, compat, rasterizer, wasm_pkg, linked_images):
+    """다중 대상의 시작 전·중단 후 목록과 입력을 고정한다."""
+    plan = {
+        'version': 1,
+        'targets': [{
+            'key': target.key,
+            'source': str(vs.resolve_input_path(root, target.hwp)),
+            'source_sha256': vs.sha256_file(vs.resolve_input_path(root, target.hwp)),
+            'pdf': str(vs.resolve_input_path(root, target.pdf)),
+            'pdf_sha256': vs.sha256_file(vs.resolve_input_path(root, target.pdf)),
+        } for target in targets],
+        'selection': selected_pages,
+        'binary': vs.rhwp_binary_identifier(root, rhwp_bin),
+        'dpi': dpi,
+        'compat': compat,
+        'rasterizer': rasterizer,
+        'wasm': vs.wasm_package_provenance(root, wasm_pkg, rasterizer) if wasm_pkg else None,
+        'linked_images': linked_images,
+        'sweep_sha256': vs.sha256_file(Path(vs.__file__)),
+        'implementation_sha256': vs.sha256_file(Path(__file__)),
+    }
+    path = out_root / 'silhouette-target-plan.json'
+    if resume:
+        if not path.is_file() or vs.load_json_object(path, '실루엣 대상 목록') != plan:
+            raise SystemExit('--resume 대상 목록 또는 실행 조건이 기존 실행과 다릅니다.')
+    else:
+        vs.write_json_atomic(path, plan)
 
 
 def render_silhouette_resumable(vs, root, target, out_root, rhwp_bin, dpi,

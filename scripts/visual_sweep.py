@@ -1549,6 +1549,7 @@ def render_target(
     silhouette_only: bool = False,
     excluded_regions: dict[int, list[tuple[int, int, int, int]]] | None = None,
     exclusion_evidence: dict[str, object] | None = None,
+    linked_images: list[dict[str, str]] | None = None,
     compat: str = "2022",
     page_workers: int = 4,
     rasterizer: str = "svg",
@@ -1614,6 +1615,8 @@ def render_target(
     provenance["layout_generation"] = compat
     if exclusion_evidence is not None:
         provenance["linked_image_exclusions"] = exclusion_evidence
+    if linked_images:
+        provenance["linked_images"] = linked_images
     if font_environment is not None:
         provenance["font_environment"] = {
             "path": str(font_environment),
@@ -1669,7 +1672,7 @@ def render_target(
                     png_module.export_wasm_png(sys.modules[__name__], root, hwp, wasm_pkg, base,
                                               selected_pages, font_paths or [], font_environment, compat,
                                               dpi, page_workers, observed_font_receipt,
-                                              linked_images=exclusion_evidence.get("assets", []) if exclusion_evidence else None)
+                                              linked_images=linked_images or (exclusion_evidence.get("assets", []) if exclusion_evidence else None))
                 else:
                     png_module.export_native_png(sys.modules[__name__], root, hwp, rhwp_bin, base,
                                                 selected_pages, font_paths or [], environment_args,
@@ -5724,6 +5727,23 @@ def custom_targets_from_args(args: argparse.Namespace) -> list[Target]:
     return dedupe_target_keys(targets)
 
 
+def linked_image_records(root: Path, paths: list[Path]) -> list[dict[str, str]]:
+    """WASM에 공급할 연결 그림의 실제 바이트와 고유 파일명을 고정한다."""
+    records = []
+    names = set()
+    for path in paths:
+        requested = resolve_input_path(root, path)
+        name = requested.name
+        source = requested.resolve()
+        if not source.is_file():
+            raise SystemExit(f"연결 그림 파일이 없습니다: {source}")
+        if name.casefold() in names:
+            raise SystemExit(f"연결 그림 파일명이 중복됩니다: {name}")
+        names.add(name.casefold())
+        records.append({"name": name, "path": str(source), "sha256": sha256_file(source)})
+    return records
+
+
 def dedupe_target_keys(targets: list[Target]) -> list[Target]:
     counts: dict[str, int] = {}
     deduped: list[Target] = []
@@ -5792,6 +5812,10 @@ def main() -> None:
         help="새 WASM web package를 Chrome에서 실행해 SVG와 render tree를 비교합니다. rhwp CLI는 글꼴 별칭과 note-shape만 제공합니다.",
     )
     parser.add_argument(
+        "--linked-image", type=Path, action="append", default=[],
+        help="WASM 직접 PNG에 공급할 원본 연결 그림 파일입니다. 필요한 파일마다 반복 지정합니다.",
+    )
+    parser.add_argument(
         "--svg-rasterizer",
         choices=("webfont", "rsvg"),
         default="webfont",
@@ -5849,10 +5873,12 @@ def main() -> None:
         parser.error("TSV는 원 점수를 유지합니다. 글꼴 예외 증거는 재검토 후 일반 PNG 모드에 지정하세요.")
     if args.linked_image_exclusions and not args.silhouette_only:
         parser.error("--linked-image-exclusions는 --silhouette-only와 함께 사용합니다.")
+    if args.linked_image and (args.wasm_pkg is None or args.rasterizer != "png"):
+        parser.error("--linked-image는 --wasm-pkg와 직접 PNG 경로에서 사용합니다.")
     if args.png_pair:
         if not args.silhouette_only:
             parser.error("--png-pair는 --silhouette-only와 함께 사용합니다.")
-        if args.target or args.hwp or args.pdf or args.file_target or args.wasm_pkg:
+        if args.target or args.hwp or args.pdf or args.file_target or args.wasm_pkg or args.linked_image:
             parser.error("--png-pair와 원문 export 입력은 함께 사용하지 않습니다.")
         pairs = silhouette_png_pairs(*args.png_pair, selected_pages)
         exclusions, evidence = (load_linked_image_exclusions(args.linked_image_exclusions)
@@ -5888,8 +5914,24 @@ def main() -> None:
                             if args.linked_image_exclusions else ({}, None))
     if evidence is not None and len(selected) != 1:
         parser.error("연결 그림 제외 증거는 정확히 하나의 원본·PDF 대상에만 적용합니다.")
+    if args.linked_image and len(selected) != 1:
+        parser.error("연결 그림 공급은 정확히 하나의 원본 대상에만 적용합니다.")
+    image_records = linked_image_records(root, args.linked_image)
+    if image_records and evidence is not None and evidence.get("assets"):
+        parser.error("--linked-image와 제외 증거의 별도 그림 공급은 함께 지정하지 않습니다.")
     out_root = root / args.out
     out_root.mkdir(parents=True, exist_ok=True)
+    if args.silhouette_only:
+        try:
+            from scripts.visual_sweep_resume import prepare_target_plan
+        except ModuleNotFoundError:
+            from visual_sweep_resume import prepare_target_plan
+        prepare_target_plan(
+            sys.modules[__name__], root, out_root, selected, selected_pages,
+            resume=args.resume, rhwp_bin=args.rhwp_bin, dpi=args.dpi,
+            compat=args.compat, rasterizer=args.rasterizer, wasm_pkg=args.wasm_pkg,
+            linked_images=image_records,
+        )
     re_review_targets: list[str] = []
     for target in selected:
         if args.silhouette_only:
@@ -5911,12 +5953,21 @@ def main() -> None:
             font_mismatch_evidence=args.font_mismatch_evidence,
             excluded_regions=exclusions,
             exclusion_evidence=evidence,
+            linked_images=image_records,
             compat=args.compat,
             page_workers=args.page_workers,
             rasterizer=args.rasterizer,
         )
         if not args.silhouette_only:
             options['silhouette_only'] = False
+        target_resume = args.resume
+        if args.silhouette_only and target_resume:
+            target_base = out_root / safe_target_key(target.key)
+            target_checkpoint = target_base / "silhouette-checkpoint.json"
+            if not target_checkpoint.exists():
+                if target_base.exists() and any(target_base.iterdir()):
+                    raise SystemExit(f"완료되지 않은 실루엣 대상에 체크포인트가 없습니다: {target_base}")
+                target_resume = False
         manifest = render(
             root,
             target,
@@ -5925,7 +5976,7 @@ def main() -> None:
             args.dpi,
             args.pixel_diff_threshold,
             selected_pages,
-            resume=args.resume,
+            resume=target_resume,
             **options,
         )
         gate = manifest.get("pr_review_gate")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,10 +10,48 @@ from unittest.mock import patch
 from PIL import Image
 
 from scripts import visual_sweep as sweep
-from scripts.visual_sweep_resume import render_silhouette_resumable
+from scripts.visual_sweep_resume import prepare_target_plan, render_silhouette_resumable
 
 
 class SilhouetteResumeTests(unittest.TestCase):
+    def test_multiple_target_plan_detects_missing_or_changed_target(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            for name in ('one.hwp', 'two.hwp', 'one.pdf', 'two.pdf', 'bin'):
+                (root / name).write_bytes(name.encode())
+            out = root / 'out'
+            out.mkdir()
+            targets = [sweep.Target('one', root / 'one.hwp', root / 'one.pdf'),
+                       sweep.Target('two', root / 'two.hwp', root / 'two.pdf')]
+            options = dict(rhwp_bin='bin', dpi=96, compat='2022', rasterizer='png',
+                           wasm_pkg=None, linked_images=[])
+            prepare_target_plan(sweep, root, out, targets, None, resume=False, **options)
+            prepare_target_plan(sweep, root, out, targets, None, resume=True, **options)
+            with self.assertRaisesRegex(SystemExit, '대상 목록'):
+                prepare_target_plan(sweep, root, out, targets[:1], None, resume=True, **options)
+            (root / 'two.pdf').write_bytes(b'changed')
+            with self.assertRaisesRegex(SystemExit, '대상 목록'):
+                prepare_target_plan(sweep, root, out, targets, None, resume=True, **options)
+
+    def test_linked_images_record_content_and_reject_duplicate_names(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            first = root / 'a' / 'photo.gif'
+            second = root / 'b' / 'PHOTO.gif'
+            first.parent.mkdir()
+            second.parent.mkdir()
+            first.write_bytes(b'first')
+            second.write_bytes(b'second')
+            records = sweep.linked_image_records(root, [first])
+            self.assertEqual(records[0]['name'], 'photo.gif')
+            self.assertEqual(records[0]['sha256'], sweep.sha256_file(first))
+            with self.assertRaisesRegex(SystemExit, '중복'):
+                sweep.linked_image_records(root, [first, second])
+            if os.name != 'nt':
+                alias = root / 'alias.gif'
+                alias.symlink_to(first)
+                self.assertEqual(sweep.linked_image_records(root, [alias])[0]['name'], 'alias.gif')
+
     def test_excluded_regions_are_part_of_resume_identity(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

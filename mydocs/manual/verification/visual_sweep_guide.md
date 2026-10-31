@@ -153,6 +153,9 @@ python3 scripts/visual_sweep.py --silhouette-only \
 
 위 예시의 `<...>`는 실제 경로·이름으로 바꾼다. 현재 코드로 web package를 새로 빌드한 뒤
 fresh WASM도 같은 입력·기준 PDF·DPI·글꼴 환경으로 실행한다.
+원본이 연결 그림을 사용하면 WASM 명령에 `--linked-image <그림 경로>`를 그림마다
+반복해 실제 파일을 공급한다. 파일명과 SHA-256은 실행 기록에 남으며 그림 영역을
+가리거나 비교에서 제외하지 않는다.
 
 ```bash
 python3 scripts/visual_sweep.py --silhouette-only \
