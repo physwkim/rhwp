@@ -1,3 +1,7 @@
+//! 관계형·고정형: 글꼴 메트릭 coverage 집계의 수량·출처와 입력 불변성을 검사한다.
+//! 주석 갱신: 2026-10-31T23:52:21+09:00; 직전 파일 커밋: 2026-10-31T23:19:18+09:00 (d6b5b19b30e14d913d123651df75dbc01efc456c).
+//! 합성 문서와 samples/task-001.hwp의 분석 API 계약이다. 출력 전후 동일성만 비교하며 시각 일치율을 판정하지 않는다.
+//! 근거: mydocs/tech/README.md 및 #4962 coverage 분석 API의 검사 본문.
 use rhwp::document_core::DocumentCore;
 use std::collections::BTreeMap;
 

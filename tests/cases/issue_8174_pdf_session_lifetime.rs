@@ -1,3 +1,7 @@
+//! 관계형·고정형: PDF 세션의 자원 제한·저장·복구와 쪽수 계약을 검사한다.
+//! 주석 갱신: 2026-10-31T23:52:21+09:00; 직전 파일 커밋: 2026-10-31T23:21:30+09:00 (0e4bd3678e298f51da104a9d7292721a808538e1).
+//! pdf/issue8174/fonts/cff-cid.pdf 등 입력으로 API 상태와 저장 결과를 비교하며 시각 일치율을 판정하지 않는다.
+//! 근거: mydocs/pr/assets/issue8174/v2-s07/README.md 및 각 검사의 입력과 assertion.
 //! Public request lifetime, first-save and recovery contracts.
 #![cfg(feature = "pdf-import")]
 use rhwp::{

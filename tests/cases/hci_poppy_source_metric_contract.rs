@@ -1,3 +1,7 @@
+//! 관계형·고정형: 합성 문자열의 원본 글꼴 전진폭 비율과 독립 폭 관측을 검사한다.
+//! 주석 갱신: 2026-10-31T23:52:21+09:00; 직전 파일 커밋: 2026-10-31T23:19:07+09:00 (9b59df521c9c427dfb9e8ea352d2337213cc3bb3).
+//! 합성 문자 경계와 원본 프로그램 단위의 폭을 비교하며 실물 쪽의 시각 일치율을 판정하지 않는다.
+//! 근거: mydocs/pr/assets/issue_8160/poppy-original-widths.json, mydocs/pr/assets/issue_8160/poppy-ascii-neutral-advances.tsv.
 //! 원본 HFT 전진폭과 표시용 대체 face를 구분하는 합성 계약이다.
 //! 독립 Print Type3 T3의 /Widths: O=785, /=605, FontMatrix=0.001.
 //! 실물 쪽의 좌표·이미지·baseline을 고정하지 않는다.

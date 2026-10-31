@@ -1,3 +1,7 @@
+//! 관계형·고정형: 양식 주소·스크립트의 저장 전후 보존과 오류 처리를 검사한다.
+//! 주석 갱신: 2026-10-31T23:52:21+09:00; 직전 파일 커밋: 2026-10-31T23:20:05+09:00 (866f50582bd9fac0d737b0b21be6395e68b0c713).
+//! samples/hwpx/form-02.hwpx 등 양식 입력의 API·직렬화 계약이며 페이지의 시각 일치율을 판정하지 않는다.
+//! 근거: mydocs/pr/assets/issue8174/v2-s04/README.md 및 각 검사의 입력과 assertion.
 //! Script/address/update contracts; these do not assert rendering fidelity or pixel placement.
 use rhwp::document_core::{queries::form_action::FormAddress, DocumentCore};
 use rhwp::model::{
