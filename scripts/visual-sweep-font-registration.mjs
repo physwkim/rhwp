@@ -29,6 +29,22 @@ export function selectMetafileFontFaces(fonts, requests) {
   return selected;
 }
 
+function missingAfterUnicodeRange(owner, bytes, text, missing) {
+  if (typeof missing !== 'string' || typeof owner?.getFontSymbolUnicodeRange !== 'function') return missing;
+  const ranges = owner.getFontSymbolUnicodeRange(new Uint8Array(bytes), 0);
+  if (!ranges) return missing;
+  const allowed = ranges.split(',').map(value => {
+    const match = /^U\+([0-9A-F]+)(?:-([0-9A-F]+))?$/i.exec(value.trim());
+    if (!match) throw Error('글꼴 기호 공급 범위가 유효하지 않습니다.');
+    return [parseInt(match[1], 16), parseInt(match[2] ?? match[1], 16)];
+  });
+  const absent = new Set(missing);
+  return [...text].filter(character => absent.has(character) || !allowed.some(([start, end]) => {
+    const code = character.codePointAt(0);
+    return code >= start && code <= end;
+  })).join('');
+}
+
 // 실제 글리프를 공급하는 후보만 고른다. 빈 요청은 기존 전체 사다리를 유지한다.
 export async function selectTextEffectFontFaces(owner, fonts, requests, loadBytes) {
   const selected = new Set();
@@ -41,24 +57,38 @@ export async function selectTextEffectFontFaces(owner, fonts, requests, loadByte
     let remaining = request.text;
     for (const family of request.families) {
       for (const key of selectMetafileFontFaces(fonts, [{...request, families: [family]}])) {
-        const record = fonts.find(face => face.families.some(name =>
+        const group = fonts.filter(face => face.families.some(name =>
           `${name.toLowerCase()}|${face.weight}|${face.style}` === key));
-        if (!record) continue;
-        const bytes = await loadBytes(record);
-        if (!bytes) continue;
-        // catalogue의 faceIndex는 원 TTC의 출처다. HTTP로 공급한 개별 SFNT는
-        // installCanvasFont/registerMetafileFont와 같은 0번 face를 조회한다.
-        const missing = typeof owner.fontMissingText === 'function'
-          ? owner.fontMissingText(new Uint8Array(bytes), 0, remaining)
-          : owner.fontSupportsText(new Uint8Array(bytes), 0, remaining) ? '' : remaining;
-        if (typeof missing !== 'string' || missing === remaining) continue;
-        selected.add(key);
-        remaining = missing;
-        break;
+        // 실제 Canvas 공급과 같은 후보·순서만 확인한다. CFF가 없는 경우
+        // 공급하지 않는 두 번째 TTF를 glyph 공급자로 판정하면 안 된다.
+        const cff = group.filter(face => face.openTypeCff);
+        const records = cff.length ? [...cff, ...group.filter(face => !face.openTypeCff)] : group.slice(0, 1);
+        for (const record of records) {
+          const bytes = await loadBytes(record);
+          if (!bytes) continue;
+          // 원 TTC의 faceIndex가 아니라 공급한 개별 SFNT의 0번 face다.
+          let missing = typeof owner.fontMissingText === 'function'
+            ? owner.fontMissingText(new Uint8Array(bytes), 0, remaining)
+            : owner.fontSupportsText(new Uint8Array(bytes), 0, remaining) ? '' : remaining;
+          missing = missingAfterUnicodeRange(owner, bytes, remaining, missing);
+          if (typeof missing !== 'string' || missing === remaining) continue;
+          selected.add(key);
+          remaining = missing;
+          if (!remaining) break;
+        }
+        if (!remaining) break;
       }
       if (!remaining) break;
     }
   }
+  return selected;
+}
+
+// 메타파일과 그림자 모두 실제 문자가 필요한 공급자만 paint에 등록한다.
+export async function selectSweepPaintFontFaces(owner, fonts, metafileRequests, effectRequests, loadBytes) {
+  const selected = await selectTextEffectFontFaces(owner, fonts, metafileRequests, loadBytes);
+  const effects = await selectTextEffectFontFaces(owner, fonts, effectRequests, loadBytes);
+  for (const key of effects) selected.add(key);
   return selected;
 }
 
