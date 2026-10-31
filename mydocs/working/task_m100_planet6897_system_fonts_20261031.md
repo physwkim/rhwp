@@ -99,3 +99,23 @@ Visual Sweep의 재개 기능은 입력 해시를 확인하므로 기존 raw gat
 검증은 보정 전 실패하는 전체 그림 및 실제 잘림 반례, #8410 패턴·저장 왕복 6건,
 #8040 동일 입력의 독립 Print 대조와 Native/fresh WASM 기준 TSV를 사용한다. 보정 전
 출력과 로그는 `output/pr-review/planet6897-ordered-20261031/replay-bc9-new-sweep/`에 보존한다.
+
+수정 전후의 임시 계약 진단은 전체 그림의 정확한 원점·끝을 수정 전 실패/수정 후
+통과로 재현했다. 실제 1원본 단위 잘림과 #8410의 2픽셀 이미지 반쪽 선택은 양쪽에서
+통과했다. 이는 공통 함수의 진단이며 정식 회귀나 Native/fresh WASM 증거를 대체하지 않는다.
+수정 후 `release-test` Native 진단 SVG는 해당 2쪽의 불필요한 중첩 crop viewport를
+제거했다. 같은 문서의 4쪽 Native 재측정은 1·3·4쪽이 수정 전과 같고, 2쪽 raw는
+`99.999505711504%`다. #8397 기준 `99.999506311804%`보다 약 `0.000000600300%p`
+낮다. 나머지 세 쪽도 기존 기준보다 낮으므로 이 보정만으로 무하락을 달성하지 못했다.
+진단 로그와 전쪽 TSV는 `output/pr-review/planet6897-ordered-20261031/crop-fix-8040-native/`에
+있으며, 최종 release Native·fresh WASM 재측정은 아직 필요하다.
+
+#8040 기호 대체를 재검토하며 현재 시스템의 `HY Sinmyeongjo`와 U+3260을 Fontconfig에
+질의했다. 기본 일치 결과는 Noto Sans CJK 계열부터 시작하며, 한컴 Print에 임베드된
+대응 윤곽이 대다수 일치한 Gulim과 동일한 선택을 보장하지 않았다. 따라서 시스템의 첫
+대체 face나 특정 문서에 Gulim을 강제하는 방식은 공통 해결 근거가 되지 않는다. 선택 결과와
+실제 글리프 공급은 추가 추적이 필요하다.
+
+공통 보정 후 최소 글꼴 환경에서 `native-skia`를 켜고 #8410 이미지 패턴·문자 획의
+기존 두 모듈을 선택해 실행한 결과 6건 모두 통과했다. 테스트 모음 전체가 아니라 선택한
+6건의 결과다. 로그는 `output/pr-review/planet6897-ordered-20261031/crop-fix-8410-native-skia-tests.log`다.
