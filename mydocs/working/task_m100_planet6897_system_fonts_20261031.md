@@ -1615,3 +1615,14 @@ paragraph 17, nested `[0,5,0]`, 글자 모양 36의 영문 슬롯이다. 원본�
 (`issue8040-p002-lt-one-exact-join.log`). 이 좌표 대조는 같은 입력의 같은 글자가
 다른 프로그램으로 출력된다는 근거다. 다른 HFT·글자 모양까지 글꼴을 일괄
 변경할 근거나 해당 페이지의 무하락 복구 결과로 확대하지 않는다.
+
+2024 HWPX 1쪽 그림의 원본 GIF(133×40, 원본 256색)를 독립적으로 읽어
+현재 RGB555·JPEG 인코딩 계약을 재실행했다. 후보 SVG의 해당 JPEG entropy와
+독립 재현 JPEG는 바이트 단위로 일치하고, 원 PR JPEG는 일치하지 않는다.
+두 출력의 JPEG 양자화표, 4:2:0 샘플링, RGB555 확장 표식 및 인쇄 프레임
+메타데이터는 같다(`sample16-gif-jpeg-diagnostic-comparison.log`,
+`sample16-image-jpeg-marker-detail.log`). 4×4 디더 위상을 모두 바꾼 별도
+16개 진단도 원 PR entropy와 일치하지 않았다
+(`sample16-gif-jpeg-phase-comparison.log`). 이는 원 PR이 다른 중간 RGB 입력이나
+전달 경로를 거쳤을 가능성을 보여 주지만 어느 단계에서 달라졌는지는 확정하지
+않는다. 진단은 제품 코드를 바꾸지 않았으며 raw 무하락을 대신하지 않는다.
