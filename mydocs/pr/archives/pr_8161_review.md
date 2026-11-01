@@ -53,3 +53,11 @@
 2026-11-01 고정 후보의 #8389·#8397 전쪽 정밀 대조에서 2,153행 중 Native 12행, WASM 8행이 공개 기준보다 낮았다. 이 수치는 이후 GIF·Canvas 보정 전 결과이며 최종 후보의 재검증 결과가 아니다. #7905 3쪽은 GIF 오른쪽 경계 누락, sample16 35쪽 WASM은 메타파일 내부의 미대응 3픽셀이 확인됐다. #8040 두 원본은 Native·WASM 전쪽이 90% 이상이다. Native 2쪽의 정밀값은 미세하게 낮지만, 사용자 지정 표시값 기준으로는 기존과 현재 모두 100.00%여서 하락이 아니다. 진행과 근거는 [작업 기록](../../working/task_m100_planet6897_system_fonts_20261031.md)을 따른다. 하락 보정과 전쪽 대조, 각 PR의 독립 Print·Native/fresh WASM 및 직접 판독을 완료해야 한다. #8410·#8412의 새 base 기능도 별도로 보존 검증한다.
 
 원 PR의 최신 head·required check와 통합 후보의 새 검증 결과를 확인하기 전에는 승인이나 merge를 진행하지 않는다.
+
+현재 통합 코드에서 굵은 맑은 고딕 폭의 OSS HWP·HWPX와 원본 HFT 폭 반례
+`issue5169` HWP를 같은 독립 Print와 Native·fresh WASM 전쪽 대조했다. 세 입력은
+각 6쪽이며 전쪽 최저는 Native 99.92% 이상, WASM 99.99% 이상이다. 고정 좌표를
+확인하는 1쪽의 글줄·숫자 간격과 HFT 굵은 제목도 직접 판독했다.
+[입력·PDF 해시, 전체 TSV와 해당 쪽 review·overlay](../assets/issue8079_bold_regular_advance/integration-planet6897/README.md)에
+연결했다. 이 자료는 이 PR의 해당 주장에 관한 증거이며 통합 전체의 무하락 검증을
+대신하지 않는다.

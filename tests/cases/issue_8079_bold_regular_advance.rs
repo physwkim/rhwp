@@ -1,5 +1,9 @@
 //! 관계형·고정형: [#8079] 굵은 글자는 Bold 면으로 그리되 전진폭은 같은 family 보통(Regular) 면으로 잡는다.
-//! 주석 갱신: 2026-11-01T12:26:33+09:00; 직전 파일 커밋: 2026-11-01T12:23:01+09:00 (27ca627ad2eb4e796a389c67a6fc6020ed807fa6).
+//! 주석 갱신: 2026-11-01T13:56:35+09:00; 직전 파일 커밋: 2026-11-01T13:03:07+09:00 (b8ebcab69e802302c75bf3cdb0b705dc31c8fcfd).
+//! 2026-11-01, 96 DPI, 독립 한컴 Print와 2px raw 실루엣 전쪽 비교:
+//! OSS HWP·HWPX 각 6쪽: 1쪽 Native 99.93%·WASM 100.00%, 전쪽 최저 Native 99.92%·WASM 100.00%.
+//! issue5169 HWP 6쪽: 1쪽 Native·WASM 100.00%, 전쪽 최저 양쪽 99.99%.
+//! 증거: mydocs/pr/assets/issue8079_bold_regular_advance/integration-planet6897/README.md.
 //!
 //! ## 무엇이 문제였나
 //!

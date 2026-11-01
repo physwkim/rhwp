@@ -1830,3 +1830,10 @@ SHA-256을 정본과 확인하고 시스템 글꼴 자동 탐색을 유지해 �
 3건 통과·실패 0건, 종료 코드 0이다(`rebase-8417-focused-minfont-retry.log`,
 `rebase-8417-focused-minfont-retry.exit`). 원 PR의 Windows 검증 기록과 현재
 Linux 재실행을 구분한다.
+
+#8079 굵은 글자 폭 검사의 OSS HWP·HWPX와 HFT 대조군 issue5169 HWP는 각 6쪽
+전쪽에서 Native 최저 99.92% 이상, fresh WASM 최저 99.99% 이상이었다. 해당
+검사의 1쪽은 Native·WASM 모두 98% 이상이며, 동일 쪽의 Print·review·overlay에서
+숫자와 제목의 글줄을 판독했다. 전쪽 TSV, SHA와 대표 이미지는
+`mydocs/pr/assets/issue8079_bold_regular_advance/integration-planet6897/`에
+보존했다. 회귀 파일은 측정 근거 주석만 보강했다.
