@@ -1847,3 +1847,14 @@ Linux 재실행을 구분한다.
 곡선 따옴표 원본의 기존 한컴 2022 PDF는 버전 메타데이터는 있지만 Print 경로를
 입증하는 기록을 확인하지 못했다. 입력의 저장 제품은 `hancom-office-2010`으로
 확인했고, 독립 한컴 2020 MCP Print를 새로 요청해 결과와 전쪽 재측정을 기다린다.
+
+곡선 따옴표 원본의 저장 제품은 `hancom-office-2010`이며, 독립 기준을 한컴 2020
+MCP로 다시 인쇄했다. job `43cf4494-584e-49b2-9b5a-05dd90e9d1ae`, 한컴
+`11.0.0.9136`, 인쇄 방식 0과 `hancom2020_pdf_driver_one_up`, 7쪽, PDF SHA-256
+`a90c88f4d42d06b91e49edb0da5172ee64d8bc3e13bcbfb406e0bfbd5b21fbd6`을 확인했다.
+새 Print의 전쪽 최저는 Native 96.96%, fresh WASM 97.73%다. 회귀가 확인하는
+3·4쪽은 Native 98.21%·98.35%, WASM 98.26%·98.29%이며 기존 review·overlay에
+쓰인 RHWP와 PDF PNG가 새 기준과 각각 같음을 해시로 확인했다. 기준 PDF·전쪽 TSV·
+인쇄 출처와 같은 쪽 이미지는 `pdf/issue7092/` 및
+`mydocs/pr/assets/issue_7092/integration-planet6897/`에 보존한다. 회귀는 주석만
+갱신하고 검사 로직은 변경하지 않았다.
