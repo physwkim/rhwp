@@ -1,5 +1,5 @@
 //! 관계형·고정형: [#8079] 굵은 글자는 Bold 면으로 그리되 전진폭은 같은 family 보통(Regular) 면으로 잡는다.
-//! 주석 갱신: 2026-11-01T12:22:22+09:00; 직전 파일 커밋: 2026-10-31T23:19:07+09:00 (859a62eebb6ec03ea8a9fc0e2848d0956bb8f18a).
+//! 주석 갱신: 2026-11-01T12:26:33+09:00; 직전 파일 커밋: 2026-11-01T12:23:01+09:00 (27ca627ad2eb4e796a389c67a6fc6020ed807fa6).
 //!
 //! ## 무엇이 문제였나
 //!
@@ -37,7 +37,7 @@ use rhwp::document_core::DocumentCore;
 /// 정본 `pdf/hwpx/2026_oss_rst.pdf` (HWP·HWPX 두 저장본이 같은 정본을 쓴다).
 const SAMPLE_OSS_HWP: &str = "samples/2026_oss_rst.hwp";
 const SAMPLE_OSS_HWPX: &str = "samples/hwpx/2026_oss_rst.hwpx";
-/// 반례(HFT 선언 굵은 영문). 정본 `pdf/issue7674/issue5169_viewtext_changetracking-hwpx-2020.pdf`.
+/// 반례(HFT 선언 굵은 영문). 정본 `pdf/issue7674/issue5169_viewtext_changetracking-2020.pdf`.
 const SAMPLE_ISSUE_5169: &str = "samples/issue5169_viewtext_changetracking.hwp";
 
 /// 맑은 고딕 보통 면 숫자 전진폭 — `malgun.ttf` hmtx 1128 / unitsPerEm 2048.

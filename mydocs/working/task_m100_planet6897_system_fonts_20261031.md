@@ -1663,3 +1663,10 @@ Native·fresh WASM 수치와 전체 쪽 최저·쪽수 일치 근거를 확인�
 자료가 없는 원본을 추정 값으로 채우거나 주석의 유형 표시만으로 기존 테스트가
 정책을 통과한 것으로 판정하지 않는다. 원본 경로 목록은
 `untyped-regression-fixture-inventory.log`다.
+
+#8079 검사에서 HFT 반례의 입력은 HWP인데 주석은 HWPX Print PDF를 가리켰고,
+기여자의 전쪽 TSV 설명은 같은 HWP의 Print PDF를 가리켰다. 두 PDF는 SHA-256은
+다르지만 PDFium 96dpi RGB 래스터의 전6쪽이 픽셀 단위로 같다
+(`issue8079-issue5169-hwp-vs-hwpx-pdf-comparison.log`). 입력과 같은 HWP의
+Print PDF로 주석을 정정했으며 assertion이나 검사 동작은 바꾸지 않았다. 이
+동등성 확인은 최종 후보의 Native·fresh WASM 전쪽 검증을 대신하지 않는다.
