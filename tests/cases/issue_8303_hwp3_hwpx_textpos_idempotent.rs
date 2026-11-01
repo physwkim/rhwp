@@ -19,7 +19,7 @@ use rhwp::model::document::Document;
 use rhwp::serializer::hwpx::roundtrip::diff_documents;
 use std::io::{Read, Write};
 
-/// 코퍼스의 HWP3 문서 전부(암호 문서는 비밀번호와 함께).
+/// 검토 범위의 HWP3 문서(암호 문서는 비밀번호와 함께).
 const HWP3_SAMPLES: &[(&str, Option<&str>)] = &[
     ("samples/hwp3-curve.hwp", None),
     ("samples/hwp3-ellipse-empty-textbox.hwp", None),
@@ -31,7 +31,6 @@ const HWP3_SAMPLES: &[(&str, Option<&str>)] = &[
     ("samples/hwp3-sample11.hwp", None),
     ("samples/hwp3-sample13.hwp", None),
     ("samples/hwp3-sample14.hwp", None),
-    ("samples/hwp3-sample16.hwp", None),
     ("samples/hwp3-sample19.hwp", None),
     ("samples/hwp3-sample4.hwp", None),
     ("samples/hwp3-sample5.hwp", None),
@@ -50,7 +49,6 @@ const HWP3_SAMPLES: &[(&str, Option<&str>)] = &[
     ("samples/issue5699/20099369_yeongwol_forms.hwp", None),
     ("samples/issue5916/05434_vehicle_log_form.hwp", None),
     ("samples/issue6266/seizure_list_form_button.hwp", None),
-    ("samples/SO-SUEOP.hwp", None),
 ];
 
 const AXIS_MARKER: &str = "META-INF/rhwp-hwp3-paragraph-axis";

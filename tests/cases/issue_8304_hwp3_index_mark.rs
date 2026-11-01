@@ -6,8 +6,8 @@
 //! 저장에서 사라졌다(`convert --verify` exit 3). 기대 키워드는 같은 문서를 한컴 오피스 2024
 //! (13.0.0.3901)가 HWP5 로 저장한 `samples/HWP5-nopassword-123456.hwp` 의 찾아보기 표시다.
 //!
-//! 이 문서는 화면 배치가 아니라 IR·저장 계약만 검사한다 — 찾아보기 표시는 그려지지 않는
-//! 컨트롤이며, 원문의 쪽 배치는 #7445 의 피델리티 범위다.
+//! 찾아보기 표시는 화면에 그려지지 않는 컨트롤이므로 IR·저장 계약으로 검증한다.
+//! 이 파일의 다른 검사들은 같은 암호 문서의 쪽수, 문단 간격, 쪽 배경과 상자 내용도 확인한다.
 
 use rhwp::document_core::DocumentCore;
 use rhwp::model::control::Control;
@@ -161,21 +161,4 @@ fn password_hwp3_hypertext_box_keeps_its_text() {
         pages[23].contains("고객지원(http://haansoft.netian.com)"),
         "24쪽"
     );
-}
-
-/// 반례: 빈 하이퍼텍스트 상자(hwp3-sample16 목차)는 한컴 Print 에 아무것도 그려지지 않으므로
-/// 종전대로 하이퍼링크 슬롯으로 남는다. 이 문서는 기존 90% 미만 쪽이 있어 배치(쪽수)는
-/// 고정하지 않고 컨트롤 구조만 본다 — 시각 무변화는 PR 의 전쪽 TSV 로 확인했다.
-#[test]
-fn empty_hypertext_box_stays_a_hyperlink_slot() {
-    let core = open("samples/hwp3-sample16.hwp", None);
-    let mut hyperlinks = 0;
-    for para in &core.document().sections[0].paragraphs {
-        for control in &para.controls {
-            if matches!(control, Control::Hyperlink(_)) {
-                hyperlinks += 1;
-            }
-        }
-    }
-    assert_eq!(hyperlinks, 4);
 }

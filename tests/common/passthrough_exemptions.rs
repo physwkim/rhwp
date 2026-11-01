@@ -41,9 +41,21 @@ const EXEMPT: &[(&str, &str, Exempt, &str)] = &[
     ),
     (
         "native_pua_fonts.rs",
+        "register_native_pua_font_for_source",
+        Exempt::SessionState,
+        "원본 글꼴 유형별 PUA 세션 프로그램과 파생 배치만 갱신하며 문서 IR과 저장 raw는 변경하지 않는다.",
+    ),
+    (
+        "native_pua_fonts.rs",
         "register_literal_figure_space_font",
         Exempt::SessionState,
         "리터럴 공백의 실제 공급 프로그램과 파생 조판 캐시만 갱신한다. native_pua_host_font_protocol에서 등록·해제 전후 명시 exact 소유권·문서 IR·저장 HWP 바이트 보존을 검사한다.",
+    ),
+    (
+        "native_pua_fonts.rs",
+        "register_literal_figure_space_font_for_source",
+        Exempt::SessionState,
+        "원본 글꼴 유형별 공백 세션 메트릭과 파생 배치만 갱신하며 문서 IR과 저장 raw는 변경하지 않는다.",
     ),
     (
         "native_pua_fonts.rs",
