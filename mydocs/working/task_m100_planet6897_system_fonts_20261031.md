@@ -1756,3 +1756,21 @@ Native 측정은 17개 대상 전쪽을 완료했다(`current-preserve-native.lo
 일치함을 확인했다. 기준 파일 변경을 현재 차이의 원인으로 간주하지 않는다.
 원 PR 본문 조회본은 `output/pr-review/planet6897-ordered-20261031/pr8389-remote-body.md`에
 보관했다.
+
+fresh WASM 후보 `cee8e58be7191a14febfb73e8b79b2ad59946ac1c7f13332d46ae92157aef55f`
+의 #8136 두 쪽은 표시값 각각 99.86%, 98.37%다. 기여자 제출 WASM의 2쪽
+99.45628%보다 낮지만, 당시 글꼴 공급 상태가 같다는 근거가 아직 없으므로 이
+수치만으로 코드 회귀의 원인을 확정하지 않는다. 같은 글꼴 환경의 기준 출력과
+확대 판독을 추가 확인한다. 현재 두 쪽 TSV는
+`output/pr-review/planet6897-ordered-20261031/regression-fresh-wasm-batch/issue8136/issue8136/silhouette.tsv`,
+2쪽 review와 overlay는 `issue8136-fresh-wasm-review/issue8136/`에 있다.
+
+Native 원점 정밀도 변경 후보 `42f64c3df533a32fb6c66ee3a8ac7c7539ce86df4b9e71d5a5d929faaa0b6008`를
+같은 시스템 글꼴과 독립 PDF로 20쪽 대조했다. 재빌드 원 기준 대비 8쪽이 하락했고,
+그중 sample16 2022의 53쪽은 보정 직전 후보 `99.513290301888%`에서
+`99.512492382693%`로 추가 하락했다. 다른 주요 하락도 그대로 남았다.
+`native-run-position-focus-comparison.tsv`와 원본·PDF hash가 같은 전후
+`silhouette-metrics/p000053.json`을 대조했다. 계산상 run 분할에 따른 반올림
+차이는 재현되지만 이 보정은 요구된 전쪽 무하락을 충족하지 못해 코드와 해당
+합성 단위 검사를 되돌렸다. 표시 개선·정밀 무하락을 동시에 만족하는 공통 원인을
+계속 추적한다.

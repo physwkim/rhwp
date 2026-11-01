@@ -103,7 +103,7 @@ pub(super) fn draw(
                 let mark_x = ((x + next_x) / 2.0) as f32 - font_size * 0.125;
                 canvas.draw_str("\u{2228}", (mark_x, y as f32), &font, &mark_paint);
             } else if ch == '\t' {
-                let mark_x = super::positions::device_x(bbox.x, origin(index));
+                let mark_x = bbox.x as f32 + origin(index) as f32;
                 canvas.draw_str("\u{2192}", (mark_x, y as f32), &font, &mark_paint);
             }
         }
