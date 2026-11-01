@@ -107,6 +107,25 @@ pub(super) fn supplied_family_names(data: &[u8], face_index: u32, primary: &str)
     families
 }
 
+/// 실제 선택된 face의 family 레코드로 요청 계열 소속을 확인한다.
+pub(super) fn typeface_declares_family(typeface: &Typeface, requested: &str) -> bool {
+    let primary = typeface.family_name();
+    if primary.eq_ignore_ascii_case(requested) {
+        return true;
+    }
+    let matches = |data: &[u8], index| {
+        supplied_family_names(data, index, &primary)
+            .iter()
+            .any(|family| family.eq_ignore_ascii_case(requested))
+    };
+    if let Some((data, index)) = typeface.to_existing_font_data() {
+        return matches(data.as_bytes(), index);
+    }
+    typeface
+        .to_font_bytes()
+        .is_some_and(|(bytes, index)| matches(&bytes, index))
+}
+
 pub(super) fn text_family_candidates(requested: &str) -> Vec<String> {
     text_family_candidates_for_weight(requested, false)
 }

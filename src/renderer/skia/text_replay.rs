@@ -14,7 +14,7 @@ use super::font_catalog::TypefaceCatalog;
 use super::font_lookup::{
     font_style_for_text, match_supplied_family, match_system_family_style,
     select_typeface_for_character, text_typeface_candidates, text_typeface_candidates_for_source,
-    SystemFontFamilies,
+    typeface_declares_family, SystemFontFamilies,
 };
 use super::renderer::colorref_to_skia;
 use super::synthetic_typeface::{draw_synthetic_bold_paths, unemboldened_typeface};
@@ -107,7 +107,7 @@ impl SkiaTextReplay<'_> {
                         .or_else(|| {
                             match_supplied_family(self.bundled_typefaces, family, font_style)
                         })?;
-                    Some(face.family_name())
+                    Some((family.to_owned(), face.family_name()))
                 })
                 .flatten();
                 // 같은 family의 한글·영문 CFF는 서로 다른 Typeface일 수 있다.
@@ -116,17 +116,18 @@ impl SkiaTextReplay<'_> {
                 let hft_outlines = std::cell::RefCell::new(std::collections::HashMap::new());
                 let draw_hft_outline =
                     |canvas: &Canvas, text: &str, font: &Font, origin, paint: &Paint| {
-                        let Some(family) = hft_outline_family.as_ref() else {
+                        let Some((requested_family, primary_family)) = hft_outline_family.as_ref()
+                        else {
                             return false;
                         };
                         let face = font.typeface();
-                        if !face.family_name().eq_ignore_ascii_case(family) {
-                            return false;
-                        }
                         let mut outlines = hft_outlines.borrow_mut();
-                        let outline = outlines
-                            .entry(face.unique_id())
-                            .or_insert_with(|| super::hft_outline::HftOutlineReplay::new(&face));
+                        let outline = outlines.entry(face.unique_id()).or_insert_with(|| {
+                            (face.family_name().eq_ignore_ascii_case(primary_family)
+                                || typeface_declares_family(&face, requested_family))
+                            .then(|| super::hft_outline::HftOutlineReplay::new(&face))
+                            .flatten()
+                        });
                         outline
                             .as_ref()
                             .is_some_and(|outline| outline.draw(canvas, text, font, origin, paint))

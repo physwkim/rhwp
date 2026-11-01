@@ -1449,3 +1449,25 @@ family가 `한양신명조`이고 해당 글리프가 있다. 두 face 모두 �
 출력에서 이 분기가 원인인지 확인하기 전에는 family 조건을 변경하지 않는다.
 진단 코드는 `output/pr-review/planet6897-ordered-20261031/diagnose-system-face.rs`,
 실행 결과는 같은 디렉터리의 `diagnose-system-face.log`에 있다.
+
+추가 분리 실행에서 기존 Print 2022 기호는 같은 OTF의 일반 raster 출력과
+픽셀이 같았고, 실제 윤곽을 사용한 진단은 해당 확대 영역의 Print와 차이가 더
+작았다. 그러나 기호 영역만 합성해 계산하면 전쪽 raw는 `98.433992103604%`에서
+`98.433888182271%`로 더 낮아졌다. 한 글자의 윤곽 재생만으로 사용자가 요구한
+전쪽 무하락을 충족했다고 볼 수 없으며, 합성 이미지는 최종 검증 증거가 아니다.
+
+별도의 font-only 계약에서는 독창적인 MIT 사각형 CFF 두 개에 서로 다른 기본
+family 이름과 같은 현지화 family를 주고, 두 번째 face만 해당 글리프를 갖도록
+했다. 2022 Print 정책에서 원본 HFT로 지정한 두 번째 face의 기준선에 0.25px를
+더해도 출력 무게중심이 움직이지 않아 기존 기본 이름 비교의 결함을 재현했다.
+시스템 글꼴을 사용하지 않는 같은 사례를 회귀 검사에 추가하고, 실제 선택 face의
+family 레코드가 요청 family를 선언한 경우를 허용하는 공통 선택 경계를 보정했다.
+이 보정은 HWP5의 미확정 HFT 여부를 추정하지 않으며 sample16의 무하락 해결을
+뜻하지 않는다. 같은 원본 family가 아닌 대체 face에는 윤곽 정책을 적용하지
+않는 반례도 추가했으며, 최소 글꼴 환경의 HFT 계약 집중 회귀 14건은 모두 통과했다.
+기존 동일 조건 분리 실행의 0.25px 이동은 0이었으며, 새 관계형 검사는 수정 후
+이를 보존한다. 로그는 `output/pr-review/planet6897-ordered-20261031/` 아래
+`diagnose-raw-alias.log`, `localized-hft-family-boundaries-minfont.log`다. 같은
+시스템 글꼴 환경의 대표 원본 8건·28쪽은 직전 후보와 raw가 모두 같았다
+(`localized-hft-family-vs-previous.tsv`). 기존 base와 비교한 10쪽 미세 하락은
+남아 있으며 나머지 전체 페이지와 fresh WASM은 별도로 확인한다.
