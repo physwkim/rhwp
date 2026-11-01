@@ -822,6 +822,8 @@ function runExecutableTextReplay(op, {
   glyphIds,
   fallbackGlyphIds,
   symbolGlyphIds,
+  innerGlyphIdsByFace,
+  preparedFaces,
   usePreparedTypeface = false,
   drawGlyphsError,
   drawParagraphError,
@@ -843,6 +845,9 @@ function runExecutableTextReplay(op, {
 
     getGlyphIDs(text, count) {
       events.push({ type: 'font.getGlyphIDs', text, count });
+      if (innerGlyphIdsByFace && /^[0-9인]+$/u.test(text)) {
+        return Uint16Array.from(innerGlyphIdsByFace[this.typeface?.face] ?? [0]);
+      }
       return Uint16Array.from(
         this.typeface?.face === 'symbol' && symbolGlyphIds
           ? symbolGlyphIds
@@ -935,7 +940,7 @@ function runExecutableTextReplay(op, {
       });
       if (drawGlyphsError) throw drawGlyphsError;
     },
-    drawText(text, x, y, paint) {
+    drawText(text, x, y, paint, font) {
       events.push({
         type: 'canvas.drawText',
         text,
@@ -943,10 +948,21 @@ function runExecutableTextReplay(op, {
         y,
         paint: paint ? { kind: paint.kind, color: paint.color, width: paint.width } : null,
       });
+      if (innerGlyphIdsByFace && /^[0-9인]+$/u.test(text)) {
+        events.push({ type: 'canvas.innerFont', face: font.typeface?.face,
+          glyphIds: Array.from(font.getGlyphIDs(text, Array.from(text).length)) });
+      }
     },
     drawRect(rect, paint) {
       events.push({
         type: 'canvas.drawRect',
+        rect,
+        paint: paint ? { kind: paint.kind, color: paint.color, width: paint.width } : null,
+      });
+    },
+    drawOval(rect, paint) {
+      events.push({
+        type: 'canvas.drawOval',
         rect,
         paint: paint ? { kind: paint.kind, color: paint.color, width: paint.width } : null,
       });
@@ -978,7 +994,9 @@ function runExecutableTextReplay(op, {
   renderer.unsupportedOps = unsupportedOps;
   if (usePreparedTypeface) {
     renderer.findPreparedTypeface = (fontFamily) => ({
-      typeface: fontFamily === 'RHWP Old Hangul'
+      typeface: preparedFaces
+        ? (preparedFaces[fontFamily] ? { face: preparedFaces[fontFamily] } : null)
+        : fontFamily === 'RHWP Old Hangul'
         ? null
         : { face: 'primary' },
       fontManager: shapedTextAvailable ? {} : null,
@@ -2923,6 +2941,7 @@ const boxedPuaReplay = runExecutableTextReplay({
   fallbackGlyphIds: [0],
   symbolGlyphIds: [0],
   usePreparedTypeface: true,
+  innerGlyphIdsByFace: { primary: [1] },
 });
 assert.equal(boxedPuaReplay.unsupportedOps.has('textRun:glyphMapping'), false);
 assert.equal(
@@ -2948,6 +2967,7 @@ const boxedPuaRatioReplay = runExecutableTextReplay({
   fallbackGlyphIds: [0],
   symbolGlyphIds: [0],
   usePreparedTypeface: true,
+  innerGlyphIdsByFace: { primary: [1] },
 });
 assert.equal(
   boxedPuaRatioReplay.unsupportedOps.has('textRun:scriptTextRequiresShaping'),
@@ -2964,6 +2984,76 @@ assert.equal(
   true,
   'boxed-PUA with 장평 should keep the bounded vector box',
 );
+// [#8201] 한컴 서명·날인 기호 U+F012B는 원 글리프가 없을 때 같은 동봉 em 메트릭으로
+// 타원 테두리와 안쪽 '인'을 합성한다. 괄호 세 글자 `(인)`로 펼치지 않는다.
+const sealReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 20, height: 20 },
+  text: '\u{F012B}',
+  baseline: 15,
+  positions: [0, 13.333],
+  style: { fontFamily: 'Prepared', fontSize: 13.333 },
+}, {
+  glyphIds: [0],
+  fallbackGlyphIds: [0],
+  symbolGlyphIds: [0],
+  usePreparedTypeface: true,
+  innerGlyphIdsByFace: { primary: [1] },
+});
+assert.equal(sealReplay.unsupportedOps.has('textRun:glyphMapping'), false);
+assert.equal(
+  sealReplay.unsupportedOps.has('textRun:scriptTextRequiresShaping'),
+  false,
+  'Hancom seal PUA must not fail closed as a shaping gap',
+);
+assert.equal(
+  sealReplay.events.filter(event => event.type === 'canvas.drawOval').length,
+  1,
+  'Hancom seal PUA should draw one ellipse frame',
+);
+assert.equal(
+  sealReplay.events.some(event => event.type === 'canvas.drawRect'),
+  false,
+  'Hancom seal PUA should not use the boxed-number square frame',
+);
+assert.deepEqual(
+  sealReplay.events.filter(event => event.type === 'canvas.drawText').map(event => event.text),
+  ['인'],
+  'Hancom seal PUA should draw only the inner 인 without parentheses',
+);
+const sealFontOp = {
+  type: 'textRun', text: '\u{F012B}', bbox: { x: 0, y: 20, width: 20, height: 20 },
+  baseline: 15, positions: [0, 13.333],
+  style: { fontFamily: 'Prepared', fontSize: 13.333 },
+};
+for (const measuredAvailable of [true, false]) {
+  const replay = runExecutableTextReplay(sealFontOp, {
+    glyphIds: [0], fallbackGlyphIds: [0], symbolGlyphIds: [0], usePreparedTypeface: true,
+    preparedFaces: { Prepared: 'primary', 'Haansoft Batang': 'measured',
+      'RHWP Public Batang': 'public' },
+    innerGlyphIdsByFace: { measured: [measuredAvailable ? 17 : 0], public: [23] },
+  });
+  assert.equal(replay.unsupportedOps.has('textRun:glyphMapping'), false);
+  assert.deepEqual(replay.events.filter(e => e.type === 'canvas.innerFont')
+    .map(({ face, glyphIds }) => ({ face, glyphIds })),
+  [{ face: measuredAvailable ? 'measured' : 'public', glyphIds: [measuredAvailable ? 17 : 23] }],
+  'seal must consume a covering preferred inner face, including a ready public fallback');
+}
+const sealBodyFallback = runExecutableTextReplay(sealFontOp, {
+  glyphIds: [0], fallbackGlyphIds: [0], symbolGlyphIds: [0], usePreparedTypeface: true,
+  preparedFaces: { Prepared: 'primary' }, innerGlyphIdsByFace: { primary: [31] },
+});
+assert.equal(sealBodyFallback.events.find(e => e.type === 'canvas.innerFont')?.face, 'primary');
+assert.equal(sealBodyFallback.unsupportedOps.has('textRun:glyphMapping'), false);
+const sealMissingInner = runExecutableTextReplay(sealFontOp, {
+  glyphIds: [0], fallbackGlyphIds: [0], symbolGlyphIds: [0], usePreparedTypeface: true,
+  preparedFaces: { Prepared: 'primary', 'RHWP Public Batang': 'public' },
+  innerGlyphIdsByFace: {},
+});
+assert.equal(sealMissingInner.unsupportedOps.has('textRun:glyphMapping'), true,
+  'a missing inner glyph must not be reported as successful text replay');
+assert.equal(sealMissingInner.events.some(e => e.type === 'canvas.drawOval'
+  || e.type === 'canvas.drawText'), false, 'missing inner glyph must not leave a partial seal');
 for (const markerText of ['[표]', '[그림]']) {
   const controlCodeMarkerReplay = runExecutableTextReplay({
     type: 'textRun',
