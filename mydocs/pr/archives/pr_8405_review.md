@@ -54,3 +54,15 @@
 [입력·PDF 해시, TSV와 대표 review·overlay](../assets/issue_8282/integration-planet6897/README.md)에
 연결했다. 이 확인은 기존 기능의 한 범위를 보호하며 #8399의 나머지 검증과 전쪽
 무하락 판정을 대신하지 않는다.
+
+2026-11-01 중간 후보 `6be28314c5`의 Native·fresh WASM으로 원 PR이 제공한 A·D·E·P
+HWP/HWPX 8개를 각 원본과 한컴 2024 Print PDF 전쪽에서 대조했다. 각 문서는 1쪽이며
+A·D·E는 양쪽 100.00%, P는 HWP와 HWPX 모두 양쪽 99.98%다. A의 다음 문단, D의 글상자
+외곽과 줄 배제, P의 그림과 후속 문단을 각 경로의 review·overlay로 직접 확인했다.
+[입력·PDF 해시, 전체 TSV와 대표 이미지](../assets/issue_8399/integration-planet6897/README.md)를
+보존했다. P HWPX는 원 PR이 기존 경로 대조군으로 구분한 입력이다.
+
+이후 HWP3 개요 번호·글꼴 보정이 추가돼 위 자료만으로 최종 제출 후보의 검증을 완료했다고
+판정하지 않는다. 기존 테스트 첫머리의 `모두 100.00%`는 현재 실측과 달라 실제 수치로
+정정했다. 원 PR의 Tight·Through와 본문 위 B·C는 테스트의 편집·재열기 경로에서도
+확인하고, 실물 원본이 저장소에 있는 A·D·E·P의 출력 증거와 구분한다.
