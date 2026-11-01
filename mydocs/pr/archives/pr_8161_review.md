@@ -36,6 +36,8 @@
 - [`hci_poppy_source_metric_contract.rs`](../../../tests/cases/hci_poppy_source_metric_contract.rs): 이전 실행 2건 통과, 0건 실패, 0건 건너뜀.
 - [`issue_8079_bold_regular_advance.rs`](../../../tests/cases/issue_8079_bold_regular_advance.rs): 이전 실행 4건 통과, 0건 실패, 0건 건너뜀.
 
+현재 코드에서 `issue_8079_bold_regular_advance` 4건을 최소 글꼴 환경으로 다시 실행해 모두 통과했다([집중 검사 로그](../../../output/pr-review/planet6897-ordered-20261031/font-slot-focused-minfont-after-commit.log)). 같은 실행은 #8136·#8315를 포함한 10건이며, #8161의 나머지 시각·회귀 검증 전체를 대신하지 않는다.
+
 검토 후보에 포함된 입력 바이트를 Git blob과 대조했다. 아래 자료는 원 PR의 제출 증거이며 새 후보의 실행 결과를 뜻하지 않는다.
 - [`2026_oss_rst.hwp`](../../../samples/2026_oss_rst.hwp) — SHA-256 `b3a43578fc441d9668d06cd55c0cd267332ecb087e47ada4c5ac456af2afc78b`.
 - [`2026_oss_rst.pdf`](../../../pdf/hwpx/2026_oss_rst.pdf) — SHA-256 `bec53a601cc7714a40ca340d26f971d1ab49eeb355682fc9db7b15cd5e04c86e`.

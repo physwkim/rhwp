@@ -34,6 +34,8 @@
 - [`issue_4962_font_metric_coverage.rs`](../../../tests/cases/issue_4962_font_metric_coverage.rs): 이전 실행 8건 통과, 0건 실패, 0건 건너뜀.
 - [`issue_8315_symbol_slot_advance.rs`](../../../tests/cases/issue_8315_symbol_slot_advance.rs): 이전 실행 3건 통과, 0건 실패, 0건 건너뜀.
 
+현재 코드에서 `issue_8315_symbol_slot_advance` 3건을 최소 글꼴 환경으로 다시 실행해 모두 통과했다([집중 검사 로그](../../../output/pr-review/planet6897-ordered-20261031/font-slot-focused-minfont-after-commit.log)). 같은 실행은 #8079·#8136을 포함한 10건이며, #8321의 나머지 시각·회귀 검증 전체를 대신하지 않는다.
+
 기여자가 제출한 기준 자료: [`ab_changed_pages_native.tsv`](../../../mydocs/pr/assets/issue_8315/ab_changed_pages_native.tsv). 해당 자료만으로 새 통합 후보의 시각 검증을 통과 처리하지 않는다.
 
 기존 생성 목록으로 최소 글꼴 회귀 12,320건 통과·45건 건너뜀을 확인했다. 생성 목록에서 누락된 #8410 두 모듈의 6건을 목록 재작성 후 같은 환경에서 별도로 실행해 모두 통과했다. 두 실행을 구분하며 한 번의 전체 실행으로 기록하지 않는다.
