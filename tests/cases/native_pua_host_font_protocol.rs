@@ -14,6 +14,8 @@ fn same_family_hft_and_truetype_requests_keep_distinct_source_programs() {
     core.create_blank_document_native().unwrap();
     core.insert_text_native(0, 0, 0, "A가").unwrap();
     let mut document = core.document().clone();
+    // HWPX의 명시적 글꼴 유형을 시험한다. HWP5 하위 비트는 유형 증거가 아니다.
+    document.provenance.format = rhwp::model::provenance::SourceFormat::Hwpx;
     document.doc_info.font_faces = (0..7)
         .map(|lang| {
             vec![rhwp::model::style::Font {
@@ -29,8 +31,14 @@ fn same_family_hft_and_truetype_requests_keep_distinct_source_programs() {
     core.set_document(document);
     let before = format!("{:?}", core.document());
     let requests = core.native_otf_font_requests();
-    assert!(requests.iter().any(|request| request.source_ttf));
-    assert!(requests.iter().any(|request| !request.source_ttf));
+    assert!(
+        requests.iter().any(|request| request.source_ttf),
+        "TrueType 요청이 없음: {requests:?}"
+    );
+    assert!(
+        requests.iter().any(|request| !request.source_ttf),
+        "HFT 요청이 없음: {requests:?}"
+    );
     let ttf = include_bytes!("../../ttfs/opensource/NotoSansKR-Regular.ttf");
     let cff = include_bytes!("../fixtures/fonts/RHWPHftOutline.otf");
     assert!(core
