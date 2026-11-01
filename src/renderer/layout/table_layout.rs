@@ -13113,12 +13113,11 @@ impl LayoutEngine {
                         }
                         let nctl = para.controls.len();
                         eprintln!(
-                            "  p[{pi}] lines={} text_len={} ctrls={} ls_stored={} text={:?}",
+                            "  p[{pi}] lines={} text_len={} ctrls={} ls_stored={}",
                             comp.lines.len(),
                             para.text.chars().count(),
                             nctl,
                             para.line_segs.len(),
-                            para.text.chars().take(16).collect::<String>(),
                         );
                     }
                 }
