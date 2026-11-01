@@ -1837,3 +1837,13 @@ Linux 재실행을 구분한다.
 숫자와 제목의 글줄을 판독했다. 전쪽 TSV, SHA와 대표 이미지는
 `mydocs/pr/assets/issue8079_bold_regular_advance/integration-planet6897/`에
 보존했다. 회귀 파일은 측정 근거 주석만 보강했다.
+
+#8136 합성 슬롯 입력의 두 쪽은 같은 한컴 2024 Print에 대해 Native
+`99.90%·98.96%`, fresh WASM `99.86%·98.37%`다. 두 출력의 각 쪽을 직접
+대조했으며 전체 TSV와 review·overlay는
+`mydocs/pr/assets/issue_8136/integration-planet6897/`에 보존했다. 회귀 파일의
+측정 주석만 갱신했고 검사 로직은 변경하지 않았다.
+
+곡선 따옴표 원본의 기존 한컴 2022 PDF는 버전 메타데이터는 있지만 Print 경로를
+입증하는 기록을 확인하지 못했다. 입력의 저장 제품은 `hancom-office-2010`으로
+확인했고, 독립 한컴 2020 MCP Print를 새로 요청해 결과와 전쪽 재측정을 기다린다.
