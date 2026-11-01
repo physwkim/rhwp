@@ -397,8 +397,8 @@ export class WasmBridge {
       if (backend === 'canvas2d') {
         const otfDoc = doc as unknown as NativePuaFontDocument | null;
         otfDoc?.prepareNativeOtfFonts?.(raw => {
-          const request = JSON.parse(raw) as {family: string};
-          return declaredOpenTypeProgram(request.family);
+          const request = JSON.parse(raw) as {family: string; source_ttf?: boolean};
+          return declaredOpenTypeProgram(request.family, Boolean(request.source_ttf));
         });
       }
     }

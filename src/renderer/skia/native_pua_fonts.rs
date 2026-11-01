@@ -11,7 +11,8 @@ impl SkiaLayerRenderer {
         core.prepare_native_otf_fonts_multiple_with(|request| {
             let style = font_style_for_text(&TextStyle {
                 font_family: request.family.clone(),
-                bold: request.bold,
+                // 명시적 TrueType의 굵은 글자 전진은 같은 family의 보통 면을 쓴다.
+                bold: request.bold && !request.source_ttf,
                 italic: request.italic,
                 ..Default::default()
             });
@@ -40,6 +41,10 @@ impl SkiaLayerRenderer {
                         bytes.get(..4),
                         Some(b"OTTO" | b"\0\x01\0\0" | b"true" | b"ttcf")
                     ) || bytes.len() > 32 * 1024 * 1024
+                        || (request.source_ttf
+                            && u32::try_from(index).ok().is_none_or(|face| {
+                                crate::renderer::native_pua_fonts::is_cff_program(&bytes, face)
+                            }))
                     {
                         return None;
                     }

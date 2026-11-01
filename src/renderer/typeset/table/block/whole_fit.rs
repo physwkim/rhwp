@@ -262,6 +262,7 @@ impl TypesetEngine {
         table: &crate::model::table::Table,
         effective_height: f64,
         host_spacing_before: f64,
+        styles: &crate::renderer::style_resolver::ResolvedStyleSet,
     ) -> Option<crate::renderer::float_placement::ParagraphFloatPlacement> {
         if st.col_count != 1
             || !(st.profile.hwpx_stored_layout() || st.profile.hwp5_stored_pagination_layout())
@@ -328,6 +329,10 @@ impl TypesetEngine {
                     next,
                     table,
                     effective_height,
+                    styles
+                        .para_styles
+                        .get(next.para_shape_id as usize)
+                        .map_or(0.0, |style| style.spacing_before),
                     self.dpi,
                 )
             })
@@ -475,6 +480,7 @@ impl TypesetEngine {
             ft,
             fmt,
             mt,
+            styles,
             paragraphs_all,
             ..
         } = input;
@@ -827,6 +833,7 @@ impl TypesetEngine {
                     table,
                     ft.effective_height,
                     fmt.spacing_before,
+                    styles,
                 )
             });
         WholeFit {

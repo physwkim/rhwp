@@ -908,11 +908,24 @@ impl HwpDocument {
                 }
                 programs.push((array.to_vec(), 0));
             }
-            prepared.insert((request.family, request.bold, request.italic), programs);
+            prepared.insert(
+                (
+                    request.family,
+                    request.bold,
+                    request.italic,
+                    request.source_ttf,
+                ),
+                programs,
+            );
         }
         self.prepare_native_otf_fonts_multiple_with(|request| {
             prepared
-                .remove(&(request.family.clone(), request.bold, request.italic))
+                .remove(&(
+                    request.family.clone(),
+                    request.bold,
+                    request.italic,
+                    request.source_ttf,
+                ))
                 .unwrap_or_default()
         })
         .map_err(JsValue::from)

@@ -9,6 +9,46 @@
 use rhwp::document_core::DocumentCore;
 
 #[test]
+fn same_family_hft_and_truetype_requests_keep_distinct_source_programs() {
+    let mut core = DocumentCore::new_empty();
+    core.create_blank_document_native().unwrap();
+    core.insert_text_native(0, 0, 0, "A가").unwrap();
+    let mut document = core.document().clone();
+    document.doc_info.font_faces = (0..7)
+        .map(|lang| {
+            vec![rhwp::model::style::Font {
+                name: "RHWP unlisted source fixture".into(),
+                alt_type: if lang == 0 { 2 } else { 1 },
+                ..Default::default()
+            }]
+        })
+        .collect();
+    for shape in &mut document.doc_info.char_shapes {
+        shape.font_ids = [0; 7];
+    }
+    core.set_document(document);
+    let before = format!("{:?}", core.document());
+    let requests = core.native_otf_font_requests();
+    assert!(requests.iter().any(|request| request.source_ttf));
+    assert!(requests.iter().any(|request| !request.source_ttf));
+    let ttf = include_bytes!("../../ttfs/opensource/NotoSansKR-Regular.ttf");
+    let cff = include_bytes!("../fixtures/fonts/RHWPHftOutline.otf");
+    assert!(core
+        .prepare_native_otf_fonts_with(|request| {
+            Some((
+                if request.source_ttf {
+                    ttf.to_vec()
+                } else {
+                    cff.to_vec()
+                },
+                0,
+            ))
+        })
+        .unwrap());
+    assert_eq!(format!("{:?}", core.document()), before);
+}
+
+#[test]
 fn otf_session_supply_preserves_document_and_saved_bytes() {
     let mut core = DocumentCore::new_empty();
     core.create_blank_document_native().unwrap();

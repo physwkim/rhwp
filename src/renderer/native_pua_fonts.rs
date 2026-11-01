@@ -53,6 +53,7 @@ pub struct NativePuaMetrics {
 pub struct NativeOtfMetrics {
     programs: Vec<NativeOtfProgram>,
     advances: std::sync::Mutex<BTreeMap<char, Option<(f64, bool, bool)>>>,
+    ttf_advances: std::sync::Mutex<BTreeMap<char, Option<f64>>>,
     coverage: std::sync::Mutex<BTreeMap<char, bool>>,
 }
 
@@ -76,6 +77,32 @@ impl PartialEq for NativeOtfMetrics {
 }
 
 impl NativeOtfMetrics {
+    /// 첫 글리프 공급자가 TrueType일 때 그 프로그램의 자연 전진을 읽는다.
+    /// 원본 폭이 확인되지 않은 명시적 TrueType 슬롯에서만 호출한다.
+    pub fn source_ttf_advance_em(&self, character: char) -> Option<f64> {
+        let mut cache = self.ttf_advances.lock().ok()?;
+        if let Some(advance) = cache.get(&character) {
+            return *advance;
+        }
+        let mut value = None;
+        for program in &self.programs {
+            let Ok(face) = ttf_parser::Face::parse(&program.bytes, program.face_index) else {
+                continue;
+            };
+            let Some(glyph) = face.glyph_index(character).filter(|id| id.0 != 0) else {
+                continue;
+            };
+            if !program.cff {
+                value = face
+                    .glyph_hor_advance(glyph)
+                    .map(|width| f64::from(width) / f64::from(face.units_per_em()));
+            }
+            break;
+        }
+        cache.insert(character, value);
+        value
+    }
+
     /// 글리프 공급 여부는 CFF 전진 사용 여부와 다르다. TTF도 표시할 수 있다.
     pub fn has_glyph(&self, character: char) -> bool {
         let Ok(mut cache) = self.coverage.lock() else {
@@ -155,7 +182,7 @@ struct LiteralSpaceMetric {
 pub struct NativePuaFonts {
     programs: BTreeMap<String, BTreeMap<(bool, bool, Option<bool>), Arc<NativePuaMetrics>>>,
     literal_spaces: BTreeMap<String, BTreeMap<(bool, bool, Option<bool>), LiteralSpaceMetric>>,
-    otf_programs: BTreeMap<String, BTreeMap<(bool, bool), Arc<NativeOtfMetrics>>>,
+    otf_programs: BTreeMap<String, BTreeMap<(bool, bool, bool), Arc<NativeOtfMetrics>>>,
 }
 
 impl NativePuaFonts {
@@ -167,6 +194,18 @@ impl NativePuaFonts {
         family: &str,
         bold: bool,
         italic: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<(), &'static str> {
+        self.register_otf_for_source(family, bold, italic, false, bytes, face_index)
+    }
+
+    pub fn register_otf_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
         bytes: &[u8],
         face_index: u32,
     ) -> Result<(), &'static str> {
@@ -186,7 +225,7 @@ impl NativePuaFonts {
         let old = self
             .otf_programs
             .get(family)
-            .and_then(|v| v.get(&(bold, italic)));
+            .and_then(|v| v.get(&(bold, italic, source_ttf)));
         if old.is_some_and(|font| {
             font.programs
                 .iter()
@@ -242,10 +281,11 @@ impl NativePuaFonts {
             .entry(family.to_owned())
             .or_default()
             .insert(
-                (bold, italic),
+                (bold, italic, source_ttf),
                 Arc::new(NativeOtfMetrics {
                     programs,
                     advances: Default::default(),
+                    ttf_advances: Default::default(),
                     coverage: Default::default(),
                 }),
             );
@@ -253,7 +293,20 @@ impl NativePuaFonts {
     }
 
     pub fn get_otf(&self, family: &str, bold: bool, italic: bool) -> Option<Arc<NativeOtfMetrics>> {
-        self.otf_programs.get(family)?.get(&(bold, italic)).cloned()
+        self.get_otf_for_source(family, bold, italic, false)
+    }
+
+    pub fn get_otf_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> Option<Arc<NativeOtfMetrics>> {
+        self.otf_programs
+            .get(family)?
+            .get(&(bold, italic, source_ttf))
+            .cloned()
     }
 
     /// 실제 표시 face의 선택은 공급자의 책임이다. 이름만으로 호출하지 않는다.

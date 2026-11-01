@@ -2,6 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {prepareNativePuaFonts, prepareHftOtfFonts} from '../visual-sweep-font-registration.mjs';
 
+test('같은 이름의 HFT와 원본 TrueType 요청은 프로그램을 섞지 않는다', async () => {
+  const requests = [
+    {family: 'Mixed', bold: false, italic: false},
+    {family: 'Mixed', bold: false, italic: false, source_ttf: true},
+  ];
+  const received = [];
+  const owner = {
+    getNativeOtfFontRequests: () => JSON.stringify(requests),
+    prepareNativeOtfFonts(provider) {
+      for (const request of requests) received.push(provider(JSON.stringify(request)));
+    },
+  };
+  const fonts = [
+    {families: ['Mixed'], weight: 400, style: 'normal', sha256: 'cff', openTypeCff: true, signature: [79, 84, 84, 79]},
+    {families: ['Mixed'], weight: 400, style: 'normal', sha256: 'ttf', openTypeCff: false, signature: [0, 1, 0, 0]},
+  ];
+  await prepareHftOtfFonts(owner, fonts, async record => Uint8Array.from(record.signature).buffer);
+  assert.deepEqual(received.map(bytes => Array.from(bytes.slice(0, 4))), fonts.map(font => font.signature));
+});
+
 test('실제 선택한 CFF만 전달하고 없는 face와 TTF는 HFT 경로에 남긴다', async () => {
   const requests = [
     {family: 'Installed', bold: true, italic: false},

@@ -120,7 +120,7 @@ export async function installCanvasFont(family, bytes, descriptors, sourceOwner 
   return font;
 }
 
-// 실제 Canvas에서 선택한 HFT 대체 OTF의 같은 바이트를 공통 조판에 공급한다.
+// Canvas에서 선택한 원본 TrueType과 HFT 대체 OTF를 출처별로 조판에 공급한다.
 export async function prepareHftOtfFonts(owner, fonts, loadBytes) {
   if (typeof owner?.getNativeOtfFontRequests !== 'function'
       || typeof owner?.prepareNativeOtfFonts !== 'function') {
@@ -130,29 +130,33 @@ export async function prepareHftOtfFonts(owner, fonts, loadBytes) {
   const programs = new Map(), loaded = new Map(), proofs = [];
   for (const request of requests) {
     const selected = selectMetafileFontFaces(fonts, [{families: [request.family],
-      weight: request.bold ? 700 : 400, italic: request.italic}]);
+      weight: request.source_ttf ? 400 : (request.bold ? 700 : 400), italic: request.italic}]);
     for (const key of selected) {
       const matches = fonts.filter(record => record.families.some(name =>
         `${name.toLowerCase()}|${record.weight}|${record.style}` === key));
       const cff = matches.filter(record => record.openTypeCff);
-      const records = cff.length ? cff : matches.slice(0, 1);
+      const records = request.source_ttf
+        ? matches.filter(record => !record.openTypeCff).slice(0, 1)
+        : (cff.length ? cff : matches.slice(0, 1));
       const selected = [], seen = new Set();
       for (const record of records) {
         if (seen.has(record.sha256)) continue;
         seen.add(record.sha256);
         let bytes = loaded.get(record.sha256);
         if (!bytes) { bytes = await loadBytes(record); loaded.set(record.sha256, bytes); }
-        if (bytes.byteLength < 4 || new DataView(bytes).getUint32(0) !== 0x4f54544f) continue;
+        if (bytes.byteLength < 4) continue;
+        const signature = new DataView(bytes).getUint32(0);
+        if (request.source_ttf ? ![0x00010000, 0x74727565].includes(signature) : signature !== 0x4f54544f) continue;
         selected.push(new Uint8Array(bytes));
-        proofs.push({family: request.family, bold: request.bold, italic: request.italic,
+        proofs.push({family: request.family, bold: request.bold, italic: request.italic, sourceTtf: Boolean(request.source_ttf),
           weight: record.weight, style: record.style, sha256: record.sha256});
       }
-      if (selected.length) programs.set(JSON.stringify([request.family, request.bold, request.italic]), selected);
+      if (selected.length) programs.set(JSON.stringify([request.family, request.bold, request.italic, Boolean(request.source_ttf)]), selected);
     }
   }
   owner.prepareNativeOtfFonts(raw => {
     const request = JSON.parse(raw);
-    const selected = programs.get(JSON.stringify([request.family, request.bold, request.italic]));
+    const selected = programs.get(JSON.stringify([request.family, request.bold, request.italic, Boolean(request.source_ttf)]));
     return selected?.length === 1 ? selected[0] : selected ?? null;
   });
   return proofs;

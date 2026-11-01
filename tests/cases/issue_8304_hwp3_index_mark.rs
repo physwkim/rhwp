@@ -50,6 +50,103 @@ fn paragraph_text(core: &DocumentCore, si: usize, pi: usize) -> String {
         .collect()
 }
 
+/// 사용자 정의 개요 번호는 한컴 저장본의 같은 문단 앞에 표시되어야 한다.
+/// 기대 문자열은 독립 한컴 2020 Print와 한컴 2024 저장 HWP5에서 확인했다.
+#[test]
+fn hwp3_custom_outline_marker_matches_hancom_heading() {
+    let hwp3 = open(HWP3, Some("123456"));
+    let hancom = open(HANCOM_HWP5, None);
+    for section in &hwp3.document().sections {
+        for paragraph in &section.paragraphs {
+            assert!(
+                paragraph.controls.iter().all(|control| {
+                    !matches!(control, Control::Field(field) if field.command.starts_with("Outline:"))
+                }),
+                "소비한 개요 마커가 공통 IR에 남으면 안 됨"
+            );
+        }
+    }
+    let hwp5_roundtrip =
+        DocumentCore::from_bytes(&hwp3.export_hwp_with_adapter().unwrap()).unwrap();
+    let hwpx_roundtrip = DocumentCore::from_bytes(&hwp3.export_hwpx_native().unwrap()).unwrap();
+    for (page, marker, body) in [(18, "가.", "메일"), (22, "사.", "한컴유틸리티")] {
+        for (label, document) in [
+            ("HWP3", &hwp3),
+            ("한컴 HWP5", &hancom),
+            ("HWP5 저장본", &hwp5_roundtrip),
+            ("HWPX 저장본", &hwpx_roundtrip),
+        ] {
+            let layout = document.get_page_text_layout_native(page).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&layout).unwrap();
+            let runs = value["runs"].as_array().unwrap();
+            assert!(
+                runs.windows(2).any(|pair| {
+                    pair[0]["text"].as_str() == Some(marker)
+                        && pair[1]["text"]
+                            .as_str()
+                            .is_some_and(|text| text.contains(body))
+                }),
+                "{label} {}쪽: {marker}가 {body} 앞에 있어야 함",
+                page + 1
+            );
+        }
+    }
+}
+
+/// 한컴 저장본과 같은 글꼴 프로그램 이름을 사용하고 HWP3 원래 이름도 보존한다.
+#[test]
+fn hwp3_gyeonmyeongjo_matches_hancom_saved_font() {
+    let hwp3 = open(HWP3, Some("123456"));
+    let hancom = open(HANCOM_HWP5, None);
+    for language in [0, 1] {
+        let actual = hwp3.document().doc_info.font_faces[language]
+            .iter()
+            .find(|font| font.alt_name.as_deref() == Some("견명조"))
+            .expect("HWP3 원래 글꼴 이름");
+        let expected = hancom.document().doc_info.font_faces[language]
+            .iter()
+            .find(|font| font.name == "한양견명조")
+            .expect("한컴이 저장한 글꼴 이름");
+        assert_eq!(actual.name, expected.name, "언어 슬롯 {language}");
+        assert_eq!(actual.alt_type, expected.alt_type, "글꼴 형식 {language}");
+    }
+}
+
+/// 폴더 설명의 첫 줄과 이어지는 줄은 같은 본문 시작선에 놓인다.
+#[test]
+fn hwp3_folder_description_tabs_align_with_continuation() {
+    let hwp3 = open(HWP3, Some("123456"));
+    let hancom = open(HANCOM_HWP5, None);
+    for (label, document) in [("HWP3", &hwp3), ("한컴 HWP5", &hancom)] {
+        let layout = document.get_page_text_layout_native(2).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&layout).unwrap();
+        let runs = value["runs"].as_array().unwrap();
+        let first = runs
+            .iter()
+            .find(|run| {
+                run["text"]
+                    .as_str()
+                    .is_some_and(|text| text.starts_with("\t\t\t") && text.contains("프로그램을"))
+            })
+            .expect("탭 뒤 폴더 설명 첫 줄");
+        let continuation = runs
+            .iter()
+            .find(|run| {
+                run["text"]
+                    .as_str()
+                    .is_some_and(|text| text.starts_with("한컴의 모든 제품에서"))
+            })
+            .expect("폴더 설명 이어지는 줄");
+        let first_x = first["x"].as_f64().unwrap() + first["charX"][3].as_f64().unwrap();
+        let next_x = continuation["x"].as_f64().unwrap();
+        let body_em = first["fontSize"].as_f64().unwrap();
+        assert!(
+            (first_x - next_x).abs() < body_em * 0.1,
+            "{label}: 설명 첫 줄과 이어지는 줄 시작선이 같아야 함: {first_x} / {next_x}"
+        );
+    }
+}
+
 #[test]
 fn hwp3_index_marks_match_hancom_hwp5_keywords() {
     let hwp3 = open(HWP3, Some("123456"));

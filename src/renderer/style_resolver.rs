@@ -1445,6 +1445,7 @@ pub(crate) fn is_heavy_display_face(font_family: &str) -> bool {
             | "HY견명조B"
             | "HY그래픽"
             | "HY그래픽M"
+            | "휴먼엑스포"
     )
 }
 

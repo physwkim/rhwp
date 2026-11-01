@@ -3146,6 +3146,7 @@ pub(crate) fn stored_float_before_whitespace_line_frame(
     successor: &Paragraph,
     table: &Table,
     measured_height: f64,
+    successor_spacing_before: f64,
     dpi: f64,
 ) -> Option<ParagraphFloatPlacement> {
     use crate::model::{
@@ -3174,13 +3175,15 @@ pub(crate) fn stored_float_before_whitespace_line_frame(
         })
         || before.line_height <= 0
         || anchor.line_height <= 0
-        || anchor.line_spacing < 0
+        || i64::from(anchor.line_height) + i64::from(anchor.line_spacing) <= 0
         || table.common.treat_as_char
         || !table.common.flow_with_text
         || !is_para_topbottom_float(&table.common)
         || table.caption.is_some()
         || signed_hwpunit(table.common.vertical_offset) < 0
         || !measured_height.is_finite()
+        || !successor_spacing_before.is_finite()
+        || successor_spacing_before < 0.0
         || !dpi.is_finite()
         || dpi <= 0.0
         || (measured_height * 7200.0 / dpi).round() != f64::from(table.common.height)
@@ -3194,10 +3197,12 @@ pub(crate) fn stored_float_before_whitespace_line_frame(
         + i64::from(signed_hwpunit(table.common.vertical_offset))
         + i64::from(table.outer_margin_top);
     let end = top + i64::from(table.common.height) + i64::from(table.outer_margin_bottom);
+    let host_line_end = end + i64::from(anchor.line_height) + i64::from(anchor.line_spacing);
+    let next_before = (successor_spacing_before * 7200.0 / dpi).round() as i64;
     if start < 0
         || end != i64::from(anchor.vertical_pos)
-        || end + i64::from(anchor.line_height) + i64::from(anchor.line_spacing)
-            != i64::from(after.vertical_pos)
+        || !(host_line_end == i64::from(after.vertical_pos)
+            || host_line_end.checked_add(next_before) == Some(i64::from(after.vertical_pos)))
     {
         return None;
     }
@@ -9474,6 +9479,60 @@ mod tests {
     use crate::model::shape::{HorzAlign, HorzRelTo, VertAlign};
     use crate::model::table::Cell;
     use crate::renderer::layout_frame::FrameExclusionPolicy;
+
+    // 저장 상자가 닫히는 합성 경계 검사다. 실문서·Print 판독은 별도로 수행한다.
+    #[test]
+    fn whitespace_host_preserves_signed_line_advance_and_next_spacing() {
+        let table = Table {
+            common: CommonObjAttr {
+                height: 50,
+                flow_with_text: true,
+                ..base_common()
+            },
+            outer_margin_top: 2,
+            outer_margin_bottom: 2,
+            ..Default::default()
+        };
+        let previous = Paragraph {
+            line_segs: vec![LineSeg {
+                vertical_pos: 100,
+                line_height: 20,
+                line_spacing: 10,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let host = Paragraph {
+            text: " ".into(),
+            controls: vec![Control::Table(Box::new(table.clone()))],
+            line_segs: vec![LineSeg {
+                vertical_pos: 184,
+                line_height: 15,
+                line_spacing: -7,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut next = Paragraph {
+            line_segs: vec![LineSeg {
+                vertical_pos: 195,
+                line_height: 10,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let frame = stored_float_before_whitespace_line_frame(
+            &previous, &host, &next, &table, 50.0, 3.0, 7200.0,
+        )
+        .expect("저장 상자와 후속 줄의 간격이 닫힌다");
+        assert_eq!(frame.table_top, 132.0);
+        assert_eq!(frame.stored_successor_line_origin, Some(195.0));
+        next.line_segs[0].vertical_pos += 1;
+        assert!(stored_float_before_whitespace_line_frame(
+            &previous, &host, &next, &table, 50.0, 3.0, 7200.0,
+        )
+        .is_none());
+    }
 
     fn base_common() -> CommonObjAttr {
         CommonObjAttr {

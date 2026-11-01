@@ -12022,13 +12022,15 @@ impl LayoutEngine {
                                     .get(para.para_shape_id as usize)
                                     .map(|s| (s.spacing_before, s.spacing_after))
                                     .unwrap_or((0.0, 0.0));
-                                // 단 상단 문단은 한컴이 `sb` 를 트림한다(`is_column_top`)
-                                // — `layout_paragraph` 도 그렇게 놓으므로 여기서 더하면
-                                // 되레 어긋난다. 단 아래로 흐른 문단에만 더한다.
+                                // 저장 첫 줄이 앞 간격을 입증해 typeset이 보존한
+                                // 프레임은 단 상단에서도 같은 값을 소비한다. 프레임이
+                                // 없으면 기존 단 상단 간격 제거 계약을 유지한다.
                                 let sb_applied = if para_start > col_area.y + 0.5 {
                                     sb.max(0.0)
                                 } else {
-                                    0.0
+                                    ctx.stored_column_top_spacings
+                                        .get(para_index)
+                                        .map_or(0.0, |frame| frame.before)
                                 };
                                 let shape_bottom = para_start + sb_applied + effective_h;
                                 if shape_bottom > y_offset {

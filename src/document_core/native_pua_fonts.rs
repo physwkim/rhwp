@@ -21,17 +21,26 @@ pub struct NativePuaFontRequest {
 }
 
 impl DocumentCore {
-    /// 원본 HFT 슬롯의 표시 face와 굵기별 실제 프로그램 요청이다.
+    /// HFT 표시 프로그램과 폭 표가 없는 원본 TrueType 프로그램을 구분해 요청한다.
     pub fn native_otf_font_requests(&self) -> Vec<NativePuaFontRequest> {
         let mut requests = BTreeMap::new();
         for style in &self.styles.char_styles {
             for lang in 0..crate::renderer::style_resolver::LANG_COUNT {
-                if !style.source_hft_for_lang(lang) {
+                let source_ttf = style.source_ttf_for_lang(lang);
+                let family = style.font_family_for_lang(lang).to_owned();
+                let primary = family.split(',').next().unwrap_or(&family).trim();
+                let needs_ttf = source_ttf
+                    && crate::renderer::font_metrics_data::find_metric(
+                        primary,
+                        false,
+                        style.italic,
+                    )
+                    .is_none();
+                if !style.source_hft_for_lang(lang) && !needs_ttf {
                     continue;
                 }
-                let family = style.font_family_for_lang(lang).to_owned();
                 requests
-                    .entry((family.clone(), style.bold, style.italic))
+                    .entry((family.clone(), style.bold, style.italic, source_ttf))
                     .or_insert(NativePuaFontRequest {
                         paint_families: crate::renderer::render_font_family_names_for_weight(
                             &family, style.bold,
@@ -39,7 +48,7 @@ impl DocumentCore {
                         family,
                         bold: style.bold,
                         italic: style.italic,
-                        source_ttf: false,
+                        source_ttf,
                         literal_figure_space: false,
                     });
             }
@@ -67,10 +76,11 @@ impl DocumentCore {
         for request in self.native_otf_font_requests() {
             for (bytes, index) in provider(&request) {
                 // 범위를 넘거나 읽을 수 없는 face는 원본 HFT 경로를 유지한다.
-                let _ = fonts.register_otf(
+                let _ = fonts.register_otf_for_source(
                     &request.family,
                     request.bold,
                     request.italic,
+                    request.source_ttf,
                     &bytes,
                     index,
                 );

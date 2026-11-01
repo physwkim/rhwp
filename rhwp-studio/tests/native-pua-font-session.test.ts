@@ -8,6 +8,43 @@ import type { HostFontData } from '../src/core/host-font-provider.ts';
 
 let serial = 0;
 
+test('같은 family의 HFT와 TrueType 폭 프로그램을 출처별로 준비한다', async () => {
+  const files = new Map(['TTF', 'CFF'].map(id => {
+    const name = id === 'TTF' ? 'RHWPHostFixture-Regular.ttf' : 'RHWPHftOutline.otf';
+    const file = readFileSync(new URL(`../../tests/fixtures/fonts/${name}`, import.meta.url));
+    return [id, file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer];
+  }));
+  await setHostFontProvider({
+    async getSnapshot() { return { revision: 'source-width-mixed', faces: ['TTF', 'CFF'].map(id => ({
+      id, family: 'MixedWidth', fullName: `MixedWidth ${id}`, postscriptName: `MixedWidth-${id}`,
+      style: 'Regular', weight: 400, slant: 'normal' as const,
+    })) }; },
+    async readFace(id) { return { bytes: files.get(id)! }; },
+    subscribe() { return () => {}; },
+  });
+  const requests = [
+    { family: 'MixedWidth', bold: false, italic: false },
+    { family: 'MixedWidth', bold: false, italic: false, source_ttf: true },
+  ];
+  const signatures: number[] = [];
+  const owner = {
+    getNativePuaFontRequests: () => '[]', registerNativePuaFont: () => false,
+    getNativeOtfFontRequests: () => JSON.stringify(requests),
+    prepareNativeOtfFonts(provider: (raw: string) => Uint8Array | Uint8Array[] | null) {
+      for (const request of requests) {
+        const selected = provider(JSON.stringify(request));
+        assert.ok(selected instanceof Uint8Array);
+        signatures.push(new DataView(selected.buffer, selected.byteOffset, selected.byteLength).getUint32(0));
+      }
+      return true;
+    },
+  };
+  try {
+    assert.equal(await new NativePuaFontSession().prepare(owner, 1, () => true, () => true), true);
+    assert.deepEqual(signatures, [0x4f54544f, 0x00010000]);
+  } finally { await setHostFontProvider(null); }
+});
+
 test('같은 family의 HFT와 TTF 요청을 독립적으로 공급하고 다시 준비해도 유지한다', async () => {
   const data = (name: string) => {
     const file = readFileSync(new URL(`../../tests/fixtures/fonts/${name}`, import.meta.url));

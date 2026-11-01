@@ -24,7 +24,7 @@ function facesForRequest(family: string, request: Request): LocalFontRecord[] {
 }
 
 function otfFaces(request: Request): LocalFontRecord[] {
-  return facesForRequest(request.family, request);
+  return facesForRequest(request.family, request.source_ttf ? { ...request, bold: false } : request);
 }
 
 /** FontFace의 준비·선택이 확인된 현재 호스트 세대에서만 원 PUA를 허용한다. */
@@ -123,17 +123,19 @@ export class NativePuaFontSession {
           if (!current() || this.prepared.get(owner) !== state
             || generation !== `${fontGeneration}:${getHostFontState().generation}`) return false;
           const bytes = data && normalizeFontFaceData(data.bytes, data.faceIndex ?? 0);
-          if (!bytes || bytes.byteLength < 4 || new DataView(bytes).getUint32(0) !== 0x4f54544f) continue;
+          if (!bytes || bytes.byteLength < 4) continue;
+          const signature = new DataView(bytes).getUint32(0);
+          if (request.source_ttf ? ![0x00010000, 0x74727565].includes(signature) : signature !== 0x4f54544f) continue;
           selected.push(new Uint8Array(bytes));
         }
         if (selected.length) {
-          programs.set(JSON.stringify([request.family, request.bold, request.italic]), selected);
+          programs.set(JSON.stringify([request.family, request.bold, request.italic, Boolean(request.source_ttf)]), selected);
         }
       }
       if (!settled) return false;
       owner.prepareNativeOtfFonts(rawRequest => {
         const request: Request = JSON.parse(rawRequest);
-        const selected = programs.get(JSON.stringify([request.family, request.bold, request.italic]));
+        const selected = programs.get(JSON.stringify([request.family, request.bold, request.italic, Boolean(request.source_ttf)]));
         return selected?.length === 1 ? selected[0] : selected ?? null;
       });
     }

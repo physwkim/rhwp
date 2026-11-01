@@ -15,6 +15,7 @@ mod font_program;
 pub mod johab;
 pub mod johab_map;
 pub mod ole;
+mod outline_numbering;
 pub mod paragraph;
 mod picture_caption;
 pub mod records;
@@ -3036,7 +3037,16 @@ fn parse_simple_control_char(
 
             let mut field = crate::model::control::Field::default();
             field.field_type = crate::model::control::FieldType::Unknown;
-            field.command = format!("Outline:kind={}:shape={}:level={}", kind, shape, level);
+            // 표 62의 사용자 정의 번호 모양과 앞뒤 장식은 뒤의 공통 번호 정의를
+            // 만들 때까지 보존한다. 마커 자체는 기존과 같이 공통 IR에서 제거한다.
+            let custom = buf[18..60]
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            field.command = format!(
+                "Outline:kind={}:shape={}:level={}:custom={}",
+                kind, shape, level, custom
+            );
 
             controls.push(crate::model::control::Control::Field(field));
             ctrl_data_records.push(None);
@@ -5289,14 +5299,49 @@ fn fixup_hwp3_outline_fields(doc: &mut crate::model::document::Document) {
     use crate::model::style::HeadType;
 
     let numbering_id = ensure_hwp3_default_outline_numbering(&mut doc.doc_info.numberings);
+    let mut custom_numberings = std::collections::HashMap::<String, u16>::new();
+    // 다른 단계의 형식은 아직 독립 출력으로 확인되지 않았다. 하나의 번호 정의를
+    // 공유하는 실제 사용 단계가 모두 확인된 형식일 때만 공통 정의로 바꾼다.
+    let mut supported_custom = std::collections::HashMap::<String, bool>::new();
+    for section in &doc.sections {
+        for paragraph in &section.paragraphs {
+            if let Some((level, Some(custom))) = hwp3_outline_number_info(paragraph) {
+                let supported = outline_numbering::custom_numbering(&custom)
+                    .is_some_and(|numbering| numbering.heads[level as usize].number_format == 8);
+                supported_custom
+                    .entry(custom)
+                    .and_modify(|all| *all &= supported)
+                    .or_insert(supported);
+            }
+        }
+    }
     for section in &mut doc.sections {
         if section.section_def.outline_numbering_id == 0 {
             section.section_def.outline_numbering_id = numbering_id;
         }
 
         for paragraph in &mut section.paragraphs {
-            let Some(level) = hwp3_outline_number_level(paragraph) else {
+            let Some((level, custom)) = hwp3_outline_number_info(paragraph) else {
                 continue;
+            };
+            let paragraph_numbering_id = if let Some(custom) =
+                custom.filter(|key| supported_custom.get(key) == Some(&true))
+            {
+                if let Some(&id) = custom_numberings.get(&custom) {
+                    id
+                } else if let Some(numbering) = outline_numbering::custom_numbering(&custom) {
+                    if let Ok(id) = u16::try_from(doc.doc_info.numberings.len() + 1) {
+                        doc.doc_info.numberings.push(numbering);
+                        custom_numberings.insert(custom, id);
+                        id
+                    } else {
+                        numbering_id
+                    }
+                } else {
+                    numbering_id
+                }
+            } else {
+                numbering_id
             };
 
             // HWP3 Outline field는 앞쪽 control marker를 본문 text에 남긴다.
@@ -5323,7 +5368,7 @@ fn fixup_hwp3_outline_fields(doc: &mut crate::model::document::Document) {
 
             let mut outline_shape = base_shape;
             outline_shape.head_type = HeadType::Number;
-            outline_shape.numbering_id = numbering_id;
+            outline_shape.numbering_id = paragraph_numbering_id;
             outline_shape.para_level = level;
             outline_shape.attr1 &= !((0x03 << 23) | (0x07 << 25));
             outline_shape.attr1 |= (0x02 << 23) | ((level as u32 & 0x07) << 25);
@@ -5402,14 +5447,30 @@ fn ensure_hwp3_default_outline_numbering(
     1
 }
 
-fn hwp3_outline_number_level(paragraph: &crate::model::paragraph::Paragraph) -> Option<u8> {
+fn hwp3_outline_number_info(
+    paragraph: &crate::model::paragraph::Paragraph,
+) -> Option<(u8, Option<String>)> {
     use crate::model::control::Control;
 
     paragraph.controls.iter().find_map(|control| {
         let Control::Field(field) = control else {
             return None;
         };
-        hwp3_outline_command_level(&field.command)
+        let level = hwp3_outline_command_level(&field.command)?;
+        let shape = field
+            .command
+            .split(':')
+            .find_map(|part| part.strip_prefix("shape="));
+        let custom = (shape == Some("0"))
+            .then(|| {
+                field
+                    .command
+                    .split(':')
+                    .find_map(|part| part.strip_prefix("custom="))
+            })
+            .flatten()
+            .map(str::to_owned);
+        Some((level, custom))
     })
 }
 
@@ -5445,6 +5506,9 @@ fn hwp3_outline_command_level(command: &str) -> Option<u8> {
 fn hwp3_font_name_to_hwp5(name: &str) -> String {
     match name.trim() {
         "신명조" => "한양신명조".to_string(),
+        // 한컴 2024 저장 HWP5의 한글·영문 슬롯은 HWP3 `견명조`를 이 HFT로 옮긴다.
+        // 같은 문서의 한컴 2020 Print도 해당 프로그램의 비례 영문 전진과 일치한다.
+        "견명조" => "한양견명조".to_string(),
         "중고딕" => "한양중고딕".to_string(),
         "견고딕" => "한양견고딕".to_string(),
         "그래픽" => "한양그래픽".to_string(),

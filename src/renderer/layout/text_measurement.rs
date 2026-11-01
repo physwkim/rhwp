@@ -936,10 +936,11 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
                 .flatten(),
             native_otf_metrics: (!styles.has_exact_font_source(char_style_id, lang_index))
                 .then(|| {
-                    styles.native_pua_fonts.get_otf(
+                    styles.native_pua_fonts.get_otf_for_source(
                         cs.font_family_for_lang(lang_index),
                         cs.bold,
                         cs.italic,
+                        cs.source_ttf_for_lang(lang_index),
                     )
                 })
                 .flatten(),
@@ -1049,10 +1050,11 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
                         font_family: storage.string(cs.font_family_for_lang(1))?,
                         native_otf_metrics: (!styles.has_exact_font_source(char_style_id, 1))
                             .then(|| {
-                                styles.native_pua_fonts.get_otf(
+                                styles.native_pua_fonts.get_otf_for_source(
                                     cs.font_family_for_lang(1),
                                     cs.bold,
                                     cs.italic,
+                                    cs.source_ttf_for_lang(1),
                                 )
                             })
                             .flatten(),
@@ -2470,7 +2472,9 @@ fn char_width_decision_with_hft_tracking<'a>(
     let otf_metrics = latin.map_or(style.native_otf_metrics.as_ref(), |slot| {
         slot.native_otf_metrics.as_ref()
     });
-    let otf_advance = if cluster_len[i] <= 1
+    let source_ttf = latin.map_or(style.source_font_is_ttf, |slot| slot.source_font_is_ttf);
+    let otf_advance = if !source_ttf
+            && cluster_len[i] <= 1
             && !dash_leader
             && !c.is_whitespace()
             && !c.is_control()
@@ -2484,9 +2488,27 @@ fn char_width_decision_with_hft_tracking<'a>(
     } else {
         None
     };
+    // 등록된 원본 TrueType의 자연 전진은 폭 표가 없는 추정 글리프에만 쓴다.
+    // 확인된 원본 폭, HFT 계약, 공백·대시 규칙은 바꾸지 않는다.
+    let ttf_advance = if source_ttf
+        && cluster_len[i] <= 1
+        && !dash_leader
+        && !c.is_whitespace()
+        && !c.is_control()
+        && matches!(
+            width_source,
+            "heuristicHalfwidth" | "heuristicNarrow" | "heuristicFullwidth"
+        ) {
+        otf_metrics.and_then(|font| font.source_ttf_advance_em(c))
+    } else {
+        None
+    };
     let (base_width_raw, width_source) = if let Some(em) = otf_advance {
         em_exact = Some(em);
         (font_size * em, "nativeOtf")
+    } else if let Some(em) = ttf_advance {
+        em_exact = Some(em);
+        (font_size * em, "nativeTrueType")
     } else {
         (base_width_raw, width_source)
     };
@@ -3167,6 +3189,50 @@ pub(crate) fn estimate_text_width_with_storage<S: crate::storage::Storage>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_source_truetype_uses_supplied_glyph_advances_without_mixing_hft() {
+        let ttf = include_bytes!("../../../ttfs/opensource/NotoSansKR-Regular.ttf");
+        let cff = include_bytes!("../../../tests/fixtures/fonts/RHWPHftOutline.otf");
+        let mut programs = crate::renderer::native_pua_fonts::NativePuaFonts::default();
+        programs
+            .register_otf_for_source("unlisted-source", false, false, true, ttf, 0)
+            .unwrap();
+        programs
+            .register_otf_for_source("unlisted-source", false, false, false, cff, 0)
+            .unwrap();
+        let mut style = TextStyle {
+            font_family: "unlisted-source".into(),
+            font_size: 24.0,
+            source_font_is_ttf: true,
+            native_otf_metrics: programs.get_otf_for_source("unlisted-source", false, false, true),
+            ..TextStyle::default()
+        };
+        let face = ttf_parser::Face::parse(ttf, 0).expect("저장소의 테스트 글꼴");
+        for (character, decision) in "V0I".chars().zip(trace_char_width_decisions("V0I", &style)) {
+            let glyph = face.glyph_index(character).expect("글리프");
+            let width = f64::from(face.glyph_hor_advance(glyph).expect("전진"))
+                / f64::from(face.units_per_em())
+                * style.font_size;
+            assert_eq!(decision.width_source, "nativeTrueType");
+            assert!((decision.base_width_px - width).abs() < 0.1);
+        }
+        style.source_font_is_ttf = false;
+        style.native_otf_metrics =
+            programs.get_otf_for_source("unlisted-source", false, false, false);
+        assert_ne!(
+            trace_char_width_decisions("0", &style)[0].width_source,
+            "nativeTrueType"
+        );
+        programs
+            .register_otf_for_source("cff-only", false, false, true, cff, 0)
+            .unwrap();
+        style.font_family = "cff-only".into();
+        style.source_font_is_ttf = true;
+        style.native_otf_metrics = programs.get_otf_for_source("cff-only", false, false, true);
+        let source = trace_char_width_decisions("0", &style)[0].width_source;
+        assert!(!matches!(source, "nativeOtf" | "nativeTrueType"));
+    }
 
     #[test]
     fn unverified_hft_otf_bold_does_not_add_original_tracking() {
