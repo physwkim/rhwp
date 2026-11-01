@@ -57,3 +57,30 @@ HWP3 찾아보기 표시를 읽고 암호 문서의 배경·간격·표·하이�
 2026-11-01 고정 후보의 #8389·#8397 전쪽 정밀 대조에서 2,153행 중 Native 12행, WASM 8행이 공개 기준보다 낮았다. 이 수치는 이후 GIF·Canvas 보정 전 결과이며 최종 후보의 재검증 결과가 아니다. #7905 3쪽은 GIF 오른쪽 경계 누락, sample16 35쪽 WASM은 메타파일 내부의 미대응 3픽셀이 확인됐다. #8040 두 원본은 Native·WASM 전쪽이 90% 이상이다. Native 2쪽의 정밀값은 미세하게 낮지만, 사용자 지정 표시값 기준으로는 기존과 현재 모두 100.00%여서 하락이 아니다. 진행과 근거는 [작업 기록](../../working/task_m100_planet6897_system_fonts_20261031.md)을 따른다. 하락 보정과 전쪽 대조, 각 PR의 독립 Print·Native/fresh WASM 및 직접 판독을 완료해야 한다. #8410·#8412의 새 base 기능도 별도로 보존 검증한다.
 
 원 PR의 최신 head·required check와 통합 후보의 새 검증 결과를 확인하기 전에는 승인이나 merge를 진행하지 않는다.
+
+### 2026-11-01 독립 Print 재확인
+
+암호 HWP3 원본을 한컴 2020 MCP에서 내용 변경 없이 인쇄했다. 작업 ID는
+`c3326c00-7816-49be-bf03-f0e616eeabb4`, 한컴 버전은 `11.0.0.9136`,
+출력 경로는 `PrintMethod=0`이며 원본과 PDF는 각각 24쪽이다. 새 기준
+[`HWP3-password-123456-print-2020.pdf`](../../../pdf/issue8304/HWP3-password-123456-print-2020.pdf)의
+SHA-256은 `279effba40fd2fe3bff6682cd6ee272cc9f49ca3fb1616f929871672637a8348`이다.
+
+같은 후보의 96 DPI 출력과 새 PDF를 전쪽 대조한 최저 raw는 Native **94.73%**,
+fresh WASM **93.84%**다. [Native TSV](../../../output/pr-review/planet6897-ordered-20261031/issue8304-mcp-pair-native/silhouette.tsv)와
+[WASM TSV](../../../output/pr-review/planet6897-ordered-20261031/issue8304-mcp-pair-wasm/silhouette.tsv)를 확인했다.
+WASM은 공개 fixture의 암호를 `HwpDocument.openWithPassword`로 넘기는 전용 출력 래퍼
+`issue8304-wasm-password-exporter.mjs`(SHA-256 `cbbd54c7f55975bd7d282c32ec09cc14ffb3b3161e63e615889c58c966f8abbe`)를 사용했다.
+기본 Visual Sweep 출력기가 암호 인자를 지원한 것으로 간주하지 않는다.
+
+[3쪽 review](../../../output/pr-review/planet6897-ordered-20261031/issue8304-mcp-review-native/issue8304-original/review/review_003.png)와
+[overlay](../../../output/pr-review/planet6897-ordered-20261031/issue8304-mcp-review-native/issue8304-original/overlay/overlay_003.png)에서
+하단 폴더 이름 뒤 설명의 첫 줄 시작점이 기준과 다르다. 이전 #1950의 #1991 수정은
+HWP3 탭의 저장 문자 오프셋을 HWP5 직렬화와 통일한 것으로 원본 HWP3 렌더 변경은 아니다.
+현재 차이의 원인을 그 수정으로 단정하지 않으며, 탭 저장 폭과 줄 프레임의 측정·배치 소비를
+추적 중이다. 90% 이상이라는 수치만으로 이 영역을 완료 판정하지 않는다.
+
+비암호 HWP5 대조 원본과 한컴 2024 Print PDF의 전 24쪽 최저 raw는 Native **94.32%**,
+fresh WASM **98.22%**다([Native 로그](../../../output/pr-review/planet6897-ordered-20261031/issue8304-hwp5-current-native.log),
+[WASM 로그](../../../output/pr-review/planet6897-ordered-20261031/issue8304-hwp5-current-wasm.log)).
+이는 HWP3 하단 탭 차이가 해결됐다는 근거가 아니다.
