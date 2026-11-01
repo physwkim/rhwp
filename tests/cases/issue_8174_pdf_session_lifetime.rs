@@ -768,7 +768,10 @@ fn exercise_metadata_save_limit(hwp: bool) {
     assert_eq!(healthy_bytes, expected.bytes());
     let metadata_save_bytes = healthy.resource_usage().decoded_bytes;
     assert!(plain_save_bytes >= opened_bytes);
-    assert!(metadata_save_bytes > plain_save_bytes, "메타데이터 저장은 추가 예산을 소비해야 한다");
+    assert!(
+        metadata_save_bytes > plain_save_bytes,
+        "메타데이터 저장은 추가 예산을 소비해야 한다"
+    );
     let mut policy = PdfImportPolicy::default();
     // 일반 저장은 허용하되 메타데이터가 든 저장은 거부하는 실제 경계를 고른다.
     policy.backend.decoded_bytes = plain_save_bytes;

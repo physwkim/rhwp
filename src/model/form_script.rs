@@ -138,27 +138,3 @@ pub(crate) fn scripts(document: &Document) -> Result<(String, String), HwpError>
         _ => script_sources_from_streams(document),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{inflate_script_stream, MAX_SCRIPT_BYTES};
-    use std::io::Write;
-
-    #[test]
-    fn script_inflation_preserves_limit_and_rejects_excess() {
-        for size in [MAX_SCRIPT_BYTES, MAX_SCRIPT_BYTES + 1] {
-            let source = vec![b'a'; size];
-            let mut encoder = flate2::write::DeflateEncoder::new(
-                Vec::new(),
-                flate2::Compression::default(),
-            );
-            encoder.write_all(&source).unwrap();
-            let result = inflate_script_stream(&encoder.finish().unwrap());
-            if size == MAX_SCRIPT_BYTES {
-                assert_eq!(result.unwrap(), source);
-            } else {
-                assert!(result.is_err(), "상한을 넘은 스크립트는 잘라 저장하지 않는다");
-            }
-        }
-    }
-}

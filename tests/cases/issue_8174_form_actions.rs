@@ -1,5 +1,5 @@
 //! 관계형·고정형: 양식 주소·스크립트의 저장 전후 보존과 오류 처리를 검사한다.
-//! 주석 갱신: 2026-10-31T23:52:21+09:00; 직전 파일 커밋: 2026-10-31T23:20:05+09:00 (866f50582bd9fac0d737b0b21be6395e68b0c713).
+//! 주석 갱신: 2026-11-01T21:43:34+09:00; 직전 파일 커밋: 2026-11-01T19:39:09+09:00 (22b687d0fc).
 //! samples/hwpx/form-02.hwpx 등 양식 입력의 API·직렬화 계약이며 페이지의 시각 일치율을 판정하지 않는다.
 //! 근거: mydocs/pr/assets/issue8174/v2-s04/README.md 및 각 검사의 입력과 assertion.
 //! Script/address/update contracts; these do not assert rendering fidelity or pixel placement.
@@ -176,6 +176,45 @@ fn excessive_or_corrupt_scripts_are_rejected_before_runtime_exposure() {
         }
     }
     assert!(core.form_action_context_native(&button(&core)).is_err());
+}
+
+#[test]
+fn compressed_script_preserves_inflation_limit_and_rejects_excess() {
+    use std::io::Write;
+    const LIMIT: usize = 1_048_576;
+    for size in [LIMIT, LIMIT + 1] {
+        let mut raw = Vec::with_capacity(size);
+        let units = (LIMIT - 8) / 2;
+        raw.extend_from_slice(&(units as u32).to_le_bytes());
+        for _ in 0..units {
+            raw.extend_from_slice(&u16::from(b'a').to_le_bytes());
+        }
+        raw.extend_from_slice(&0u32.to_le_bytes());
+        if size > LIMIT {
+            raw.push(0);
+        }
+        let mut encoder =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(&raw).unwrap();
+        let mut core = sample();
+        let address = button(&core);
+        let document = core.document_mut();
+        document
+            .hwpx_aux_entries
+            .retain(|(path, _)| !path.starts_with("Scripts/"));
+        document
+            .extra_streams
+            .retain(|(path, _)| path.trim_start_matches('/') != "Scripts/DefaultJScript");
+        document
+            .extra_streams
+            .push(("Scripts/DefaultJScript".into(), encoder.finish().unwrap()));
+        let result = core.form_action_context_native(&address);
+        if size == LIMIT {
+            assert!(result.is_ok(), "상한 크기 스크립트는 보존한다");
+        } else {
+            assert!(result.is_err(), "상한 초과 스크립트는 잘라 저장하지 않는다");
+        }
+    }
 }
 
 #[test]

@@ -151,19 +151,35 @@ fn synthetic_line_segs_are_not_reported_as_loss() {
         // 최신 저장기는 원본 줄 계약을 지켜 위 왕복에서 차이가 없을 수 있다.
         // 동일 문서에서 모든 줄이 합성인 경우를 만들어 생략 전후 검출을 검증한다.
         let mut synthetic = hwp.document().clone();
-        let (section, paragraph) = synthetic.sections.iter().enumerate().find_map(|(si, s)| {
-            s.paragraphs.iter().position(|p| !p.line_segs.is_empty()).map(|pi| (si, pi))
-        }).expect("합성 줄 계약을 시험할 원본 줄");
+        let (section, paragraph) = synthetic
+            .sections
+            .iter()
+            .enumerate()
+            .find_map(|(si, s)| {
+                s.paragraphs
+                    .iter()
+                    .position(|p| !p.line_segs.is_empty())
+                    .map(|pi| (si, pi))
+            })
+            .expect("합성 줄 계약을 시험할 원본 줄");
         for line in &mut synthetic.sections[section].paragraphs[paragraph].line_segs {
             line.tag |= rhwp::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY;
         }
         let mut omitted = synthetic.clone();
-        omitted.sections[section].paragraphs[paragraph].line_segs.clear();
+        omitted.sections[section].paragraphs[paragraph]
+            .line_segs
+            .clear();
         assert!(
-            raw_differences(&synthetic, &omitted).iter().any(|d| d.contains("linesegs")),
+            raw_differences(&synthetic, &omitted)
+                .iter()
+                .any(|d| d.contains("linesegs")),
             "{path}: 정규화 전 합성 줄 생략을 검출해야 한다"
         );
-        assert_eq!(verify_differences(&synthetic, &omitted, true), Vec::<String>::new(), "{path}");
+        assert_eq!(
+            verify_differences(&synthetic, &omitted, true),
+            Vec::<String>::new(),
+            "{path}"
+        );
     }
 }
 

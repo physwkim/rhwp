@@ -93,7 +93,10 @@ fn verify(data: &str) {
                 if runs.is_empty() {
                     // 글꼴 슬롯이 달라도 같은 물리 줄의 연속 텍스트라면 한 원문이다.
                     // 각 런을 이어 독립 Print의 기준 문구와 일치시킨 뒤 첫 글자의 원점을 잰다.
-                    for line in nodes.iter().filter(|node| matches!(node.node_type, RenderNodeType::TextLine(_))) {
+                    for line in nodes
+                        .iter()
+                        .filter(|node| matches!(node.node_type, RenderNodeType::TextLine(_)))
+                    {
                         let mut content = String::new();
                         let mut first = None;
                         for child in &line.children {

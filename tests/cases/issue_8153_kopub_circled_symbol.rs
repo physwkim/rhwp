@@ -29,11 +29,8 @@ fn find(node: &LayerNode, out: &mut Vec<(String, BoundingBox)>) {
                 if let PaintOp::TextRun { bbox, run, .. } = o {
                     if matches!(
                         run.text.as_str(),
-                        "  ①, ②, ③, ④, "
-                            | "  ①, ②, ③, ④, …"
-                            | "  ㉮, ㉯, ㉰, ㉱, …"
-                    )
-                    {
+                        "  ①, ②, ③, ④, " | "  ①, ②, ③, ④, …" | "  ㉮, ㉯, ㉰, ㉱, …"
+                    ) {
                         assert_eq!(run.char_shape_id, Some(89));
                         out.push((run.text.clone(), *bbox));
                     }

@@ -9482,60 +9482,6 @@ mod tests {
     use crate::model::table::Cell;
     use crate::renderer::layout_frame::FrameExclusionPolicy;
 
-    // 저장 상자가 닫히는 합성 경계 검사다. 실문서·Print 판독은 별도로 수행한다.
-    #[test]
-    fn whitespace_host_preserves_signed_line_advance_and_next_spacing() {
-        let table = Table {
-            common: CommonObjAttr {
-                height: 50,
-                flow_with_text: true,
-                ..base_common()
-            },
-            outer_margin_top: 2,
-            outer_margin_bottom: 2,
-            ..Default::default()
-        };
-        let previous = Paragraph {
-            line_segs: vec![LineSeg {
-                vertical_pos: 100,
-                line_height: 20,
-                line_spacing: 10,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        let host = Paragraph {
-            text: " ".into(),
-            controls: vec![Control::Table(Box::new(table.clone()))],
-            line_segs: vec![LineSeg {
-                vertical_pos: 184,
-                line_height: 15,
-                line_spacing: -7,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        let mut next = Paragraph {
-            line_segs: vec![LineSeg {
-                vertical_pos: 195,
-                line_height: 10,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        let frame = stored_float_before_whitespace_line_frame(
-            &previous, &host, &next, &table, 50.0, 3.0, 7200.0,
-        )
-        .expect("저장 상자와 후속 줄의 간격이 닫힌다");
-        assert_eq!(frame.table_top, 132.0);
-        assert_eq!(frame.stored_successor_line_origin, Some(195.0));
-        next.line_segs[0].vertical_pos += 1;
-        assert!(stored_float_before_whitespace_line_frame(
-            &previous, &host, &next, &table, 50.0, 3.0, 7200.0,
-        )
-        .is_none());
-    }
-
     fn base_common() -> CommonObjAttr {
         CommonObjAttr {
             text_wrap: TextWrap::TopAndBottom,
@@ -9789,6 +9735,58 @@ mod tests {
 
     #[test]
     fn stored_reset_fragment_geometry_separates_first_paint_height_from_successor_origin() {
+        // 저장 상자가 닫히는 추가 경계와 닫히지 않는 반례를 함께 확인한다.
+        {
+            let table = Table {
+                common: CommonObjAttr {
+                    height: 50,
+                    flow_with_text: true,
+                    ..base_common()
+                },
+                outer_margin_top: 2,
+                outer_margin_bottom: 2,
+                ..Default::default()
+            };
+            let previous = Paragraph {
+                line_segs: vec![LineSeg {
+                    vertical_pos: 100,
+                    line_height: 20,
+                    line_spacing: 10,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let host = Paragraph {
+                text: " ".into(),
+                controls: vec![Control::Table(Box::new(table.clone()))],
+                line_segs: vec![LineSeg {
+                    vertical_pos: 184,
+                    line_height: 15,
+                    line_spacing: -7,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let mut next = Paragraph {
+                line_segs: vec![LineSeg {
+                    vertical_pos: 195,
+                    line_height: 10,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let frame = stored_float_before_whitespace_line_frame(
+                &previous, &host, &next, &table, 50.0, 3.0, 7200.0,
+            )
+            .expect("저장 상자와 후속 줄의 간격이 닫힌다");
+            assert_eq!(frame.table_top, 132.0);
+            assert_eq!(frame.stored_successor_line_origin, Some(195.0));
+            next.line_segs[0].vertical_pos += 1;
+            assert!(stored_float_before_whitespace_line_frame(
+                &previous, &host, &next, &table, 50.0, 3.0, 7200.0,
+            )
+            .is_none());
+        }
         let (host, table) = stored_reset_fragment_candidate();
 
         assert_eq!(

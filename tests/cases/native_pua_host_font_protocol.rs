@@ -1,5 +1,5 @@
 //! 관계형: 글꼴 소유자 등록과 해제의 세션 프로토콜 계약.
-//! 주석 갱신: 2026-10-30T10:05:44+09:00; 직전 파일 커밋: 2026-10-30T02:17:47+09:00 (55d447871d).
+//! 주석 갱신: 2026-11-01T21:43:34+09:00; 직전 파일 커밋: 2026-11-01T19:39:45+09:00 (caf4102da7).
 //! 근거: tests/fixtures/fonts/RHWPHostFixture.LICENSE.md, tests/fixtures/fonts/RHWPEquationFonts.LICENSE.md.
 //! 글꼴 등록·해제 전후의 세션 소유 관계 검사이며 페이지별 raw 측정은 대상이 아니다.
 //! 실제 글꼴 요청 이름과 명시 exact 소유자의 세션 프로토콜 계약.
@@ -386,4 +386,261 @@ fn additional_source_box_plus_preserves_its_program_and_fallback() {
 #[test]
 fn additional_source_dash_preserves_its_program_and_fallback() {
     assert_prepared_source_symbol('\u{f0848}', "━");
+}
+
+use rhwp::renderer::native_pua_fonts::NativePuaFonts;
+
+// 저장소에 포함된 테스트 글꼴만 공급해 시스템 글꼴 설치에 의존하지 않는다.
+const REGULAR: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPEquationLatinOnly.ttf");
+const LIGHT: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPEquationCJKLight.ttf");
+const NO_DIGIT: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPHftOutline.otf");
+
+#[test]
+fn compact_truetype_retains_unicode_coverage_and_natural_advances() {
+    let collection = include_bytes!("../fixtures/fonts/RHWPHostFixture.ttc");
+    for (bytes, index) in [
+        (REGULAR, 0),
+        (LIGHT, 0),
+        (collection.as_slice(), 0),
+        (collection.as_slice(), 1),
+        (collection.as_slice(), 2),
+    ] {
+        let mut fonts = NativePuaFonts::default();
+        fonts
+            .register_otf_for_source("fixture", false, false, true, bytes, index)
+            .unwrap();
+        let metrics = fonts
+            .get_otf_for_source("fixture", false, false, true)
+            .unwrap();
+        let original = ttf_parser::Face::parse(bytes, index).unwrap();
+        for code in 0..=0x10ffff {
+            let Some(ch) = char::from_u32(code) else {
+                continue;
+            };
+            if let Some(glyph) = original.glyph_index(ch).filter(|glyph| glyph.0 != 0) {
+                assert!(metrics.has_glyph(ch), "문자 매핑 {index}: {ch:?}");
+                let expected = original
+                    .glyph_hor_advance(glyph)
+                    .map(|v| f64::from(v) / f64::from(original.units_per_em()));
+                assert_eq!(
+                    metrics.source_ttf_advance_em(ch),
+                    expected,
+                    "자연 전진 {index}: {ch:?}"
+                );
+            }
+        }
+        assert!(!metrics.has_glyph('\u{10ffff}'));
+    }
+}
+
+#[test]
+fn truetype_metrics_do_not_exhaust_budget_with_unused_font_bytes() {
+    let mut fonts = NativePuaFonts::default();
+    for index in 0..7u8 {
+        let mut padded = REGULAR.to_vec();
+        padded.resize(10 * 1024 * 1024, index);
+        let family = format!("fixture-{index}");
+        fonts
+            .register_otf_for_source(&family, false, false, true, &padded, 0)
+            .expect("전진폭에 사용하지 않는 바이트는 보유 한도를 차지하지 않음");
+        assert!(fonts
+            .get_otf_for_source(&family, false, false, true)
+            .and_then(|metrics| metrics.source_ttf_advance_em('A'))
+            .is_some());
+    }
+}
+
+#[test]
+fn literal_space_programs_are_owned_by_source_type() {
+    let mut fonts = NativePuaFonts::default();
+    fonts
+        .register_literal_space("Mixed", false, false, REGULAR, 0)
+        .unwrap();
+    fonts
+        .register_literal_space_for_source("Mixed", false, false, false, LIGHT, 0)
+        .unwrap();
+    fonts
+        .register_literal_space_for_source("Mixed", false, false, true, REGULAR, 0)
+        .unwrap();
+    assert_eq!(
+        fonts.literal_space_em_for_source("Mixed", false, false, false),
+        Some(0.528)
+    );
+    assert_eq!(
+        fonts.literal_space_em_for_source("Mixed", false, false, true),
+        Some(0.555)
+    );
+    assert!(fonts.has_literal_space_for_source("Mixed", false, false, true));
+
+    fonts
+        .register_literal_space_for_source("Mixed", false, false, true, NO_DIGIT, 0)
+        .unwrap();
+    assert!(
+        !fonts.has_literal_space_for_source("Mixed", false, false, true),
+        "공통 등록의 대체 가능 여부는 명시 유형 등록의 성공이 아니다"
+    );
+    assert_eq!(
+        fonts.literal_space_em_for_source("Mixed", false, false, true),
+        Some(0.555)
+    );
+    assert_eq!(
+        fonts.literal_space_em_for_source("Mixed", false, false, false),
+        Some(0.528)
+    );
+}
+
+#[test]
+fn unassigned_hwp5_font_bits_do_not_create_truetype_requests() {
+    use rhwp::model::provenance::SourceFormat;
+    let mut core = DocumentCore::new_empty();
+    core.create_blank_document_native().unwrap();
+    core.insert_text_native(0, 0, 0, "A가").unwrap();
+    let mut doc = core.document().clone();
+    doc.doc_info.font_faces = (0..7)
+        .map(|_| {
+            vec![rhwp::model::style::Font {
+                name: "RHWP unlisted source fixture".into(),
+                alt_type: 1,
+                ..Default::default()
+            }]
+        })
+        .collect();
+    for shape in &mut doc.doc_info.char_shapes {
+        shape.font_ids = [0; 7];
+    }
+    doc.provenance.format = SourceFormat::Hwp5;
+    doc.provenance.hwpx_lineage = false;
+    core.set_document(doc.clone());
+    assert!(!core
+        .native_otf_font_requests()
+        .iter()
+        .any(|request| request.source_ttf));
+    doc.provenance.hwpx_lineage = true;
+    core.set_document(doc.clone());
+    assert!(core
+        .native_otf_font_requests()
+        .iter()
+        .any(|request| request.source_ttf));
+    doc.provenance.hwpx_lineage = false;
+    doc.provenance.format = SourceFormat::Hwpx;
+    core.set_document(doc.clone());
+    assert!(core
+        .native_otf_font_requests()
+        .iter()
+        .any(|request| request.source_ttf));
+    for fonts in &mut doc.doc_info.font_faces {
+        fonts[0].alt_type = 2;
+    }
+    core.set_document(doc);
+    let requests = core.native_otf_font_requests();
+    assert!(requests.iter().any(|request| !request.source_ttf));
+    assert!(!requests.iter().any(|request| request.source_ttf));
+}
+
+#[test]
+fn supplied_truetype_advance_is_distinct_from_hft_and_cff() {
+    use rhwp::renderer::{
+        layout::{EmbeddedTextMeasurer, TextMeasurer},
+        TextStyle,
+    };
+    let ttf = include_bytes!("../../ttfs/opensource/NotoSansKR-Regular.ttf");
+    let cff = include_bytes!("../fixtures/fonts/RHWPHftOutline.otf");
+    let mut programs = NativePuaFonts::default();
+    programs
+        .register_otf_for_source("unlisted-source", false, false, true, ttf, 0)
+        .unwrap();
+    programs
+        .register_otf_for_source("unlisted-source", false, false, false, cff, 0)
+        .unwrap();
+    let mut style = TextStyle {
+        font_family: "unlisted-source".into(),
+        font_size: 24.0,
+        source_font_is_ttf: true,
+        native_otf_metrics: programs.get_otf_for_source("unlisted-source", false, false, true),
+        ..Default::default()
+    };
+    let face = ttf_parser::Face::parse(ttf, 0).unwrap();
+    for ch in "V0I".chars() {
+        let expected = f64::from(
+            face.glyph_hor_advance(face.glyph_index(ch).unwrap())
+                .unwrap(),
+        ) / f64::from(face.units_per_em())
+            * style.font_size;
+        let positions = EmbeddedTextMeasurer.compute_char_positions(&ch.to_string(), &style);
+        assert!(
+            (positions[1] - positions[0] - expected).abs() < 0.1,
+            "{ch}: {:?} != {expected}",
+            positions
+        );
+    }
+    programs
+        .register_otf_for_source("cff-only", false, false, true, cff, 0)
+        .unwrap();
+    style.font_family = "cff-only".into();
+    style.native_otf_metrics = None;
+    let baseline = EmbeddedTextMeasurer.compute_char_positions("0", &style);
+    style.native_otf_metrics = programs.get_otf_for_source("cff-only", false, false, true);
+    assert_eq!(
+        EmbeddedTextMeasurer.compute_char_positions("0", &style),
+        baseline
+    );
+}
+
+#[test]
+fn hft_bold_tracking_requires_verified_source_and_program() {
+    use rhwp::renderer::{
+        layout::{EmbeddedTextMeasurer, TextMeasurer},
+        TextStyle,
+    };
+    let original = include_bytes!("../fixtures/fonts/RHWPHftOutline.otf");
+    let mut renamed = original.to_vec();
+    let utf16 = |s: &str| {
+        s.encode_utf16()
+            .flat_map(u16::to_be_bytes)
+            .collect::<Vec<_>>()
+    };
+    let from = utf16("RHWP HFT Outline Fixture");
+    let to = utf16("Sinmyeong Junggothic    ");
+    assert_eq!(from.len(), to.len());
+    let mut count = 0;
+    for offset in 0..=renamed.len() - from.len() {
+        if renamed[offset..offset + from.len()] == from {
+            renamed[offset..offset + to.len()].copy_from_slice(&to);
+            count += 1;
+        }
+    }
+    assert!(count > 0);
+    let mut programs = NativePuaFonts::default();
+    programs
+        .register_otf("verified", true, false, &renamed, 0)
+        .unwrap();
+    programs
+        .register_otf("other", true, false, original, 0)
+        .unwrap();
+    let mut style = TextStyle {
+        font_size: 20.0,
+        bold: true,
+        source_font_is_hft: true,
+        native_otf_metrics: programs.get_otf("other", true, false),
+        ..Default::default()
+    };
+    let width = |style: &TextStyle| {
+        let p = EmbeddedTextMeasurer.compute_char_positions("가", style);
+        p[1] - p[0]
+    };
+    let regular = width(&style);
+    style.source_hwp3_hft_bold = true;
+    assert!(width(&style) > regular);
+    style.source_hwp3_hft_bold = false;
+    style.native_otf_metrics = programs.get_otf("verified", true, false);
+    assert!(style
+        .native_otf_metrics
+        .as_ref()
+        .unwrap()
+        .has_verified_hft_bold_tracking('가'));
+    let without_source = width(&style);
+    style.source_verified_hft_bold_tracking = true;
+    assert!((width(&style) - without_source - 1.0).abs() < 0.1);
+    style.native_otf_metrics = programs.get_otf("other", true, false);
+    assert!((width(&style) - regular).abs() < 1e-8);
 }
