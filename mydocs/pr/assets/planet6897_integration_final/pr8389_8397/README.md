@@ -15,7 +15,9 @@ Visual Sweep 소수 둘째 자리 표시값을 비교하며, 현재 표시값이
   포함하지 않으며 나머지 입력은 별도 치환 없이 시스템 글꼴을 사용했다.
 - [Native 전체 기준 행 대조](native-display-comparison.tsv): 2,153행, 중복 제거 후
   1,770쪽, 누락 0쪽, 표시값 하락 0행. 각 행에 원본 기준 TSV 경로를 남겼다.
-- fresh WASM 전쪽 비교는 현재 진행 중이며 완료 후 결과를 이 문서에 추가한다.
+- [fresh WASM 전체 기준 행 대조](wasm-display-comparison.tsv): 2,153행, 중복 제거 후
+  1,770쪽, 누락 0쪽, 표시값 하락 0행. 동일 글꼴 설정의 편람과 나머지 입력의 완료된
+  전쪽 결과를 대조했다. [sample10 전쪽 TSV](wasm-sample10.tsv)는 763쪽이고 최저 99.40%다.
 - 동일 글꼴 설정의 [WASM 편람 HWP 전쪽 TSV](wasm-handbook-hwp.tsv)는 383쪽이며,
   두 기준 TSV의 총 766행과 대조한 결과 표시값 하락이 없다. 전체 최저는 99.96%다.
 - 동일 글꼴 설정의 [WASM 편람 HWPX 전쪽 TSV](wasm-handbook-hwpx.tsv)는 383쪽이며,
