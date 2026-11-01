@@ -1439,3 +1439,13 @@ Native·Canvas의 공통 조건을 시험했다. 명시적 TTF와 다른 프로�
 선택된 face의 동일성부터 더 확인해야 하며, 이 실험을 회귀 해결로 판정하지 않는다.
 1·2쪽은 base와 같았다. 실행 로그는 각각 `output/pr-review/planet6897-ordered-20261031/`
 아래 `hft-origin-focus-compare.log`와 `hft-origin-v2-focus-compare.log`다.
+
+실제 Skia 시스템 face 조회에서는 같은 `한양신명조` 요청의 기본 face가
+`HY Sinmyeongjo`이며 `※` 글리프가 없었다. 같은 요청의 일곱 번째 face는
+family가 `한양신명조`이고 해당 글리프가 있다. 두 face 모두 시스템에서 실제
+글꼴 바이트를 읽을 수 있었다. 기존 윤곽 재생은 선택된 face의 family 문자열과
+기본 face의 family 문자열을 직접 비교하므로 이 두 face를 같은 요청의 구성원으로
+인식하지 못한다. 시스템별 설치 구성에 의존하지 않는 합성 face 대조와 실제
+출력에서 이 분기가 원인인지 확인하기 전에는 family 조건을 변경하지 않는다.
+진단 코드는 `output/pr-review/planet6897-ordered-20261031/diagnose-system-face.rs`,
+실행 결과는 같은 디렉터리의 `diagnose-system-face.log`에 있다.
