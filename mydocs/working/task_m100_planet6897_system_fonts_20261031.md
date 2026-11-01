@@ -1812,3 +1812,21 @@ sample16 기존 100.00%의 원본 글꼴 공급 설정을 보존 호스트에서
 대표 review·overlay를 `mydocs/pr/assets/issue_8282/integration-planet6897/`에
 기록했고 두 경로의 산출 PNG 해시도 각 review 생성본과 같음을 확인했다. 해당
 회귀 파일에는 측정 근거 주석만 추가했으며 assertion이나 제품 코드는 변경하지 않았다.
+
+사용자는 시스템 글꼴 전체를 제공하면서 기존 기준의 대체 설정도 해당 검증에
+적용하도록 지정했다. 기존 설정 `original-hft-programs-2020-pua.json`의
+SHA-256을 정본과 확인하고 시스템 글꼴 자동 탐색을 유지해 재측정했다. sample16
+2022 HWP는 Native 전 64쪽이 `100.00%`로 기존 표시값과 같으며 90% 미만은 없다
+(`sample16-2022-original-font-env-native/sample16-hwp2022/silhouette.tsv`,
+종료 코드 0). WASM은 같은 조건으로 진행 중이다. 2024 HWP·HWPX에는 정본
+`original-hft-programs-2024-pua.json`(SHA-256
+`53a7cff101203c61080a59769730f6f7050e5af22870b8a9d233bff7a95ec64c`)을
+적용해 두 경로를 재측정 중이다. 이 설정은 검증에만 사용하며 제품의 자동 글꼴
+선택을 변경하지 않는다. 기존 두 PR의 동일 문서·쪽 중복은 표시값이 더 높은
+기준을 선택해 한 번 비교한다(`authorized-font-env-*-display-comparison.tsv`).
+
+리베이스로 포함한 #8417의 CFB 경로 정규화 두 곳을 현재 트리에서 확인했다.
+최소 글꼴 Linux 환경의 `issue_8225_group_child_ctrl_data` 집중 회귀는 재실행에서
+3건 통과·실패 0건, 종료 코드 0이다(`rebase-8417-focused-minfont-retry.log`,
+`rebase-8417-focused-minfont-retry.exit`). 원 PR의 Windows 검증 기록과 현재
+Linux 재실행을 구분한다.
