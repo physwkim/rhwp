@@ -1,5 +1,9 @@
 //! 관계형·고정형: [#8282] HWPX 로 저장한 뒤 다시 열어도 글자처럼 그림 + 어울림 부동 도형 문단의 배치가 같고,
-//! 주석 갱신: 2026-11-01T12:22:22+09:00; 직전 파일 커밋: 2026-10-31T23:21:31+09:00 (5618e31c9c53e11e6886eab8fece8931995aae39).
+//! 주석 갱신: 2026-11-01T13:45:16+09:00; 직전 파일 커밋: 2026-11-01T13:03:06+09:00 (4024b2bf39610ec6fbe5c6a42c28ee7151e28e8b).
+//! 2026-11-01, 96 DPI, 독립 한컴 2020 Print와 2px raw 실루엣 비교:
+//! `tac_picture_square_{picture_overlap,textbox,textbox_left_overlap,textbox_overlap}.hwpx`
+//! 각 1쪽은 Native·fresh WASM 모두 100.00%; 전쪽 최저도 원본별 각 100.00%.
+//! 증거: mydocs/pr/assets/issue_8282/integration-planet6897/README.md.
 //! 어울림 개체가 줄 폭을 한/글처럼 줄인다.
 //!
 //! 결함: HWPX 저장은 편집한 문단의 `linesegarray` 를 뺀다. rhwp 가 다시 열면 그 문단을 저장 줄 없이

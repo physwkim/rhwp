@@ -1794,3 +1794,21 @@ Native 원점 정밀도 변경 후보 `42f64c3df533a32fb6c66ee3a8ac7c7539ce86df4
 `100.00% → 100.00%`로 통과다. 전체 Native·WASM은 현재 실행 중이며 중간
 대조표는 `current-full-system-native-display-comparison.tsv`,
 `current-full-system-wasm-display-comparison.tsv`다.
+
+sample16 기존 100.00%의 원본 글꼴 공급 설정을 보존 호스트에서 확인했다.
+`raw100-proof.json`에 기록된 설정 파일의 SHA-256
+`9d42f0162206f4b829c603092c8db445ff5979d1d79f4d9a6b0155918459b43f`과
+가져온 파일의 해시가 일치하며, 해당 설정은 `휴먼명조`를 `Gulim`으로 명시
+대체한다(`original-hft-programs-2020-pua-reference.json`). 당시 명시 공급한
+217개 글꼴 프로그램의 해시는 현재 시스템 글꼴 목록에서 모두 확인했다
+(`issue8160-original-font-system-hash-inventory.tsv`). 현재 실제 글꼴 추적은
+같은 문서의 `휴먼명조` 요청에서 시스템 `Human Myeongjo`를 선택한다
+(`sample16-2022-p10-face-source-trace.json`). 설정 차이가 확인됐지만 이것만으로
+사용자의 표시값 무하락 조건을 면제하지 않으며, 두 출력의 실제 차이를 계속 확인한다.
+
+#8282 기존 기능의 네 HWPX 입력과 독립 한컴 2020 Print는 Native·fresh WASM
+각각 1쪽 전부 raw 100.00%다. 8개 overlay에서 어울림 글상자·그림, 글자처럼
+배치된 그림, 앞뒤 줄과 후속 문단을 직접 확인했다. 원본·PDF 해시, 전체 TSV와
+대표 review·overlay를 `mydocs/pr/assets/issue_8282/integration-planet6897/`에
+기록했고 두 경로의 산출 PNG 해시도 각 review 생성본과 같음을 확인했다. 해당
+회귀 파일에는 측정 근거 주석만 추가했으며 assertion이나 제품 코드는 변경하지 않았다.
