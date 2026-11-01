@@ -4,7 +4,7 @@
 
 - Native 실행 파일 SHA-256: `4b03859cfa21cdba1a766d5141d260adf70d3c986c6481a3e8440d1ab992ae96`.
 - WASM SHA-256: `cee8e58be7191a14febfb73e8b79b2ad59946ac1c7f13332d46ae92157aef55f`.
-- 제품 코드 생산 커밋 `6be28314c5` 이후 현재 코드의 `src`, `crates`, `vendor`, Cargo 및 Studio 소스는 동일하다. 시스템 글꼴을 사용했고 글꼴 파일은 추가하지 않았다.
+- 이 증거는 제품 코드 생산 커밋 `6be28314c5`의 이전 통합 후보를 대상으로 한다. 이후 제품 코드가 변경됐으므로 최신 head의 재검증 결과로 취급하지 않는다. 시스템 글꼴을 사용했고 글꼴 파일은 추가하지 않았다.
 - 표의 TSV에 사용한 1쪽 PNG와 직접 판독한 review·overlay 생성 PNG는 각각 SHA-256이 동일하다.
 
 | 입력 | 입력 SHA-256 | Print PDF SHA-256 | Native 1쪽 / 전쪽 최저 | WASM 1쪽 / 전쪽 최저 |

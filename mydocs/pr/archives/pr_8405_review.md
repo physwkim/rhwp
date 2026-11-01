@@ -21,6 +21,14 @@
 
 재컴파일 후 전체 회귀와 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
 
+## 원 PR 주장 페이지의 최신 Native 증거
+
+원 PR이 제시한 A·D·E·P의 HWP/HWPX와 각각의 독립 한컴 2024 Print를 대조했다. 각 입력은 1쪽이며 Native raw는 A·D·E 100.00%, P 99.98%다. D의 줄 배제와 글상자 위치, A의 후속 문단 관계를 원 PR과 같은 입력에서 확인했다.
+
+[Native A HWP TSV](../assets/planet6897_integration_final/pr8405/native-A-hwp.tsv) · [Native D HWPX TSV](../assets/planet6897_integration_final/pr8405/native-D-hwpx.tsv) · [Native P HWPX TSV](../assets/planet6897_integration_final/pr8405/native-P-hwpx.tsv) · [D review](../assets/planet6897_integration_final/pr8405/native-D-hwpx-review.png) · [D overlay](../assets/planet6897_integration_final/pr8405/native-D-hwpx-overlay.png) · [A review](../assets/planet6897_integration_final/pr8405/native-A-hwp-review.png) · [A overlay](../assets/planet6897_integration_final/pr8405/native-A-hwp-overlay.png)
+
+![원 PR의 D HWPX Native overlay](../assets/planet6897_integration_final/pr8405/native-D-hwpx-overlay.png)
+
 ## 변경 주장과 검토 관점
 
 비TAC 어울림 글상자의 바깥 여백 상자를 본문 줄 배제와 개체 배치에 함께 사용한다.
@@ -54,7 +62,7 @@
 
 원 PR의 최신 head·required check와 통합 후보의 새 검증 결과를 확인하기 전에는 승인이나 merge를 진행하지 않는다.
 
-현재 통합 코드에서 #8282의 글자처럼 배치된 그림과 어울림 글상자·그림 네 입력을
+이전 통합 후보 `6be28314c5`에서 #8282의 글자처럼 배치된 그림과 어울림 글상자·그림 네 입력을
 같은 독립 한컴 2020 Print PDF와 다시 비교했다. 각 입력은 1쪽이고 Native·fresh WASM
 모두 raw 100.00%다. 두 출력의 글상자 경계와 주변 글줄·후속 문단을 직접 확인했으며,
 [입력·PDF 해시, TSV와 대표 review·overlay](../assets/issue_8282/integration-planet6897/README.md)에

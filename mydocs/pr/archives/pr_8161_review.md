@@ -21,6 +21,26 @@
 
 재컴파일 후 전체 회귀와 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
 
+## 원 PR 주장 페이지의 최신 Native 증거
+
+원 PR이 제시한 `113424_evaluation_guideline.hwpx` 5쪽을 같은 한컴 2024 Print PDF와 대조했다. 해당 문서의 전체 46쪽 최저 raw는 91.51%이며, 후속 보정 대상 46쪽은 99.74%다.
+
+[Native 전쪽 TSV](../assets/planet6897_integration_final/pr8161/native-113424.tsv) · [5쪽 review](../assets/planet6897_integration_final/pr8161/native-113424-p005-review.png) · [5쪽 overlay](../assets/planet6897_integration_final/pr8161/native-113424-p005-overlay.png) · [46쪽 review](../assets/planet6897_integration_final/pr8161/native-113424-p046-review.png) · [46쪽 overlay](../assets/planet6897_integration_final/pr8161/native-113424-p046-overlay.png)
+
+![원 PR의 113424 5쪽 Native overlay](../assets/planet6897_integration_final/pr8161/native-113424-p005-overlay.png)
+
+원 PR에서 함께 제시한 다른 주장 페이지의 당시 증거는 다음과 같다. 이 자료는 원 PR 코드
+`bba7229a1b`의 출력이며 현재 통합 head의 재검증 결과와 구분한다.
+
+| 원본과 주장 페이지 | Native | 당시 fresh WASM |
+| --- | --- | --- |
+| `2026_oss_rst.hwp` 1쪽의 굵은 숫자와 영문 | [review](../assets/issue8079_bold_regular_advance/native-oss-p001-review.png) · [overlay](../assets/issue8079_bold_regular_advance/native-oss-p001-overlay.png) | [review](../assets/issue8079_bold_regular_advance/wasm-oss-p001-review.png) · [overlay](../assets/issue8079_bold_regular_advance/wasm-oss-p001-overlay.png) |
+| `1613000-202200037-air-traffic-controller-cbta.hwp` 42쪽의 굵은 머리말 | [review](../assets/issue8079_bold_regular_advance/native-d1613-p042-review.png) · [overlay](../assets/issue8079_bold_regular_advance/native-d1613-p042-overlay.png) | [review](../assets/issue8079_bold_regular_advance/wasm-d1613-p042-review.png) · [overlay](../assets/issue8079_bold_regular_advance/wasm-d1613-p042-overlay.png) |
+| `hwpx_sample2.hwp` 2쪽의 날짜와 줄 끝 | [review](../assets/issue8079_bold_regular_advance/native-hs2-p002-review.png) · [overlay](../assets/issue8079_bold_regular_advance/native-hs2-p002-overlay.png) | [review](../assets/issue8079_bold_regular_advance/wasm-hs2-p002-review.png) · [overlay](../assets/issue8079_bold_regular_advance/wasm-hs2-p002-overlay.png) |
+
+원 PR의 입력·PDF·명령과 [쪽별 비교 TSV](../assets/issue8079_bold_regular_advance/tsv/changed-devel-vs-head.tsv)는
+[원 증거 설명](../assets/issue8079_bold_regular_advance/README.md)에 기록돼 있다.
+
 ## 변경 주장과 검토 관점
 
 굵은 TrueType의 잉크는 Bold face를 쓰고 전진폭은 같은 family의 보통 face를 사용하며 HFT는 제외한다. 저장 줄과 새 줄을 함께 다룬다.
@@ -60,7 +80,7 @@
 
 원 PR의 최신 head·required check와 통합 후보의 새 검증 결과를 확인하기 전에는 승인이나 merge를 진행하지 않는다.
 
-현재 통합 코드에서 굵은 맑은 고딕 폭의 OSS HWP·HWPX와 원본 HFT 폭 반례
+이전 통합 후보 `6be28314c5`에서 굵은 맑은 고딕 폭의 OSS HWP·HWPX와 원본 HFT 폭 반례
 `issue5169` HWP를 같은 독립 Print와 Native·fresh WASM 전쪽 대조했다. 세 입력은
 각 6쪽이며 전쪽 최저는 Native 99.92% 이상, WASM 99.99% 이상이다. 고정 좌표를
 확인하는 1쪽의 글줄·숫자 간격과 HFT 굵은 제목도 직접 판독했다.
@@ -112,3 +132,10 @@ face를 확인했다. 독립 Print의 내장 이름 `ExpoM-HM`과 일치하며, 
 여전히 다르다. TTC 두 번째 face의 `0`·`2` 전진은 각각 442/512·325/512em이며
 한컴 PDF의 해당 문자 원점 차이와 일치한다. 현재 실제 프로그램 폭 준비가 HFT 슬롯에만
 적용돼 원본 TrueType의 반각 추정 폭을 대체하지 못하는 경로를 수정해야 한다.
+
+후속 원인 대조에서는 시스템의 같은 TTC가 대표 이름 `Expo M`과 한글 family
+`휴먼엑스포`를 함께 선언함을 확인했다. 기존 Native 실행에서 후자를 전자로 명시해
+실제 설치 face를 사용하면 28쪽 raw는 95.06%에서 100.00%가 되고 제목도 Print와
+일치한다. 이는 이름 조회 경로의 반례이며 최종 수정 결과는 아니다. Linux에서 사용자
+글꼴 설치 위치가 현지화 이름 복구 검색에서 빠진 경로를 수정하고, 별칭 지정 없이
+다시 측정해야 한다.

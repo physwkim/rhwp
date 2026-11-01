@@ -4,7 +4,7 @@
 
 - Native 실행 파일 SHA-256: `4b03859cfa21cdba1a766d5141d260adf70d3c986c6481a3e8440d1ab992ae96`.
 - WASM SHA-256: `cee8e58be7191a14febfb73e8b79b2ad59946ac1c7f13332d46ae92157aef55f`.
-- 제품 코드 생산 커밋 `6be28314c5` 이후 현재 통합 코드의 `src`, `crates`, `vendor`, Cargo 및 Studio 소스에 차이가 없음을 확인했다. 시스템 글꼴을 사용했고 글꼴 파일은 포함하지 않는다.
+- 이 증거는 제품 코드 생산 커밋 `6be28314c5`의 이전 통합 후보를 대상으로 한다. 이후 제품 코드가 변경됐으므로 최신 head의 재검증 결과로 취급하지 않는다. 시스템 글꼴을 사용했고 글꼴 파일은 포함하지 않는다.
 - 8개 TSV의 출력 PNG와 review·overlay 생성에 쓰인 PNG는 각각 SHA-256이 같다. 네 입력 모두 두 경로의 Print와 비교해 글자처럼 그림, 어울림 개체, 줄 나눔과 다음 문단을 직접 확인했다.
 
 | 입력 | HWPX SHA-256 | Print PDF SHA-256 | Native TSV | WASM TSV |

@@ -21,6 +21,16 @@ HWP3 찾아보기·개요 번호 검사 `issue_8304_hwp3_index_mark` 9건은 모
 
 재컴파일 후 전체 회귀와 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
 
+## 원 PR 주장 페이지의 최신 Native 증거
+
+암호 HWP3 원본 `samples/HWP3-password-123456.hwp`을 동일 원본의 한컴 2020 Print와 대조했다. 전 24쪽 최저 raw는 98.27%다. 원 PR이 명시한 찾아보기·하이퍼텍스트 상자와 본문 위치를 각각 3·17·20·24쪽에서 대조했다.
+
+[Native 전쪽 TSV](../assets/planet6897_integration_final/pr8346/native-hwp3-original.tsv) · [3쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p003-review.png) · [17쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-review.png) · [17쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png) · [20쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p020-review.png) · [24쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p024-review.png)
+
+![원 PR의 HWP3 원본 17쪽 Native overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png)
+
+원 PR의 첫 쪽 배경과 후속 쪽 배경 제거 주장은 [1쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p001-review.png) · [1쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p001-overlay.png), [2쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p002-review.png) · [2쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p002-overlay.png)로 확인한다. 문단 간격 대조에는 [7쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p007-review.png) · [7쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p007-overlay.png)를 연결했다.
+
 ## 변경 주장과 검토 관점
 
 HWP3 찾아보기 표시를 읽고 암호 문서의 배경·간격·표·하이퍼텍스트 처리를 보정한다.

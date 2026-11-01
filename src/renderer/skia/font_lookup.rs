@@ -719,6 +719,23 @@ mod tests {
             recovered.unichar_to_glyph('A' as i32),
             source.unichar_to_glyph('A' as i32)
         );
+        let empty_catalog = TypefaceCatalog::default();
+        let (_, candidates) = text_typeface_candidates_for_source(
+            &font_mgr,
+            &enumerated,
+            &empty_catalog,
+            &empty_catalog,
+            localized,
+            FontStyle::normal(),
+            true,
+        );
+        assert_eq!(
+            candidates
+                .first()
+                .map(|candidate| candidate.typeface.family_name()),
+            Some(source.family_name()),
+            "현지화 이름은 fallback보다 먼저 실제 설치 family로 선택한다"
+        );
         assert!(match_system_family_style(
             &font_mgr,
             &enumerated,
