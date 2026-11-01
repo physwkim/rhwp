@@ -1,6 +1,8 @@
 //! 실제 paint 공급자가 준비한 SFNT에서만 원 PUA 표시와 전진폭을 선택한다.
 //! 폰트 bytes와 윤곽은 보관하지 않으며, 문서 IR의 family와 문자도 변경하지 않는다.
 
+mod metric_sfnt;
+
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
@@ -221,6 +223,23 @@ impl NativePuaFonts {
         }
         let face =
             ttf_parser::Face::parse(bytes, face_index).map_err(|_| "invalid native font face")?;
+        let cff = is_cff_program(bytes, face_index);
+        let faux_bold = bold && !face.is_bold();
+        let verified_hft_bold_tracking = face.names().into_iter().any(|name| {
+            matches!(
+                name.name_id,
+                ttf_parser::name_id::FAMILY | ttf_parser::name_id::TYPOGRAPHIC_FAMILY
+            ) && name.to_string().is_some_and(|family| {
+                matches!(family.trim(), "신명 중고딕" | "Sinmyeong Junggothic")
+            })
+        });
+        let compact = (!cff)
+            .then(|| metric_sfnt::compact_truetype_metrics(bytes, face_index))
+            .flatten();
+        let (bytes, face_index) = match compact.as_deref() {
+            Some(metrics) => (metrics, 0),
+            None => (bytes, face_index),
+        };
         let digest: [u8; 32] = Sha256::digest(bytes).into();
         let old = self
             .otf_programs
@@ -266,16 +285,9 @@ impl NativePuaFonts {
             bytes: shared.unwrap_or_else(|| Arc::from(bytes)),
             face_index,
             digest,
-            faux_bold: bold && !face.is_bold(),
-            cff: is_cff_program(bytes, face_index),
-            verified_hft_bold_tracking: face.names().into_iter().any(|name| {
-                matches!(
-                    name.name_id,
-                    ttf_parser::name_id::FAMILY | ttf_parser::name_id::TYPOGRAPHIC_FAMILY
-                ) && name.to_string().is_some_and(|family| {
-                    matches!(family.trim(), "신명 중고딕" | "Sinmyeong Junggothic")
-                })
-            }),
+            faux_bold,
+            cff,
+            verified_hft_bold_tracking,
         });
         self.otf_programs
             .entry(family.to_owned())
@@ -562,12 +574,61 @@ impl NativePuaFonts {
 
 #[cfg(test)]
 mod source_type_tests {
-    use super::NativePuaFonts;
+    use super::{metric_sfnt::compact_truetype_metrics, NativePuaFonts};
 
     // 저장소에 포함된 테스트 글꼴만 공급해 시스템 글꼴 설치에 의존하지 않는다.
     const REGULAR: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPEquationLatinOnly.ttf");
     const LIGHT: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPEquationCJKLight.ttf");
     const NO_DIGIT: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPHftOutline.otf");
+
+    #[test]
+    fn compact_truetype_retains_unicode_coverage_and_natural_advances() {
+        let collection = include_bytes!("../../tests/fixtures/fonts/RHWPHostFixture.ttc");
+        for (bytes, index) in [
+            (REGULAR, 0),
+            (LIGHT, 0),
+            (collection.as_slice(), 0),
+            (collection.as_slice(), 1),
+            (collection.as_slice(), 2),
+        ] {
+            let compact = compact_truetype_metrics(bytes, index).expect("TrueType 메트릭 표");
+            let original = ttf_parser::Face::parse(bytes, index).unwrap();
+            let reduced = ttf_parser::Face::parse(&compact, 0).unwrap();
+            assert_eq!(original.units_per_em(), reduced.units_per_em());
+            for code in 0..=0x10ffff {
+                let Some(ch) = char::from_u32(code) else {
+                    continue;
+                };
+                let a = original.glyph_index(ch);
+                let b = reduced.glyph_index(ch);
+                assert_eq!(a, b, "문자 매핑 {ch:?}");
+                assert_eq!(
+                    a.and_then(|id| original.glyph_hor_advance(id)),
+                    b.and_then(|id| reduced.glyph_hor_advance(id)),
+                    "자연 전진 {ch:?}"
+                );
+            }
+            assert!(compact.len() <= bytes.len());
+        }
+        assert!(compact_truetype_metrics(NO_DIGIT, 0).is_none());
+    }
+
+    #[test]
+    fn truetype_metrics_do_not_exhaust_budget_with_unused_font_bytes() {
+        let mut fonts = NativePuaFonts::default();
+        for index in 0..7u8 {
+            let mut padded = REGULAR.to_vec();
+            padded.resize(10 * 1024 * 1024, index);
+            let family = format!("fixture-{index}");
+            fonts
+                .register_otf_for_source(&family, false, false, true, &padded, 0)
+                .expect("전진폭에 사용하지 않는 바이트는 보유 한도를 차지하지 않음");
+            assert!(fonts
+                .get_otf_for_source(&family, false, false, true)
+                .and_then(|metrics| metrics.source_ttf_advance_em('A'))
+                .is_some());
+        }
+    }
 
     #[test]
     fn literal_space_programs_are_owned_by_source_type() {
