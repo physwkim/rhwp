@@ -883,6 +883,7 @@ impl DocumentCore {
         row_heights_hu: Option<&[u32]>,
         default_char_shape_id: u32,
         default_para_shape_id: u16,
+        inherited_line: crate::model::paragraph::LineSeg,
         anchor: InlineTableAnchor,
     ) -> Result<(crate::model::table::Table, bool), HwpError> {
         use crate::model::paragraph::{CharShapeRef, LineSeg};
@@ -916,7 +917,6 @@ impl DocumentCore {
             top: 141,
             bottom: 141,
         };
-        let inherited_line = creation_line::for_cursor(self, section_idx, para_idx, char_offset);
         let min_row_height: u32 =
             cell_pad.top as u32 + inherited_line.line_height.max(0) as u32 + cell_pad.bottom as u32;
         let row_heights: Vec<u32> = if let Some(heights) = row_heights_hu {
@@ -1136,6 +1136,7 @@ impl DocumentCore {
         let default_char_shape_id: u32 = current_para.char_shape_id_at(char_offset).unwrap_or(0);
         let default_para_shape_id: u16 = current_para.para_shape_id;
 
+        let inherited_line = creation_line::for_cursor(self, section_idx, para_idx, char_offset);
         let (table, _) = self.build_inline_table(
             content_width,
             row_count,
@@ -1144,6 +1145,7 @@ impl DocumentCore {
             row_heights_hu,
             default_char_shape_id,
             default_para_shape_id,
+            inherited_line,
             InlineTableAnchor::Body,
         )?;
 
@@ -1261,7 +1263,7 @@ impl DocumentCore {
         }
 
         // ── 확인과 상속값 — 여기까지는 문서를 바꾸지 않는다 ──
-        let (default_char_shape_id, default_para_shape_id) = {
+        let (default_char_shape_id, default_para_shape_id, empty_para) = {
             let paras = self.get_cell_paragraphs_mut_by_path(section_idx, parent_para_idx, path)?;
             let para = paras.get(cell_para_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("칸 문단 {} 범위 초과", cell_para_idx))
@@ -1276,6 +1278,7 @@ impl DocumentCore {
             (
                 para.char_shape_id_at(char_offset).unwrap_or(0),
                 para.para_shape_id,
+                Paragraph::new_empty_like(para),
             )
         };
         let (cell_width, pad_left, pad_right) = self
@@ -1284,6 +1287,8 @@ impl DocumentCore {
         let inner_width = (cell_width - pad_left as i32 - pad_right as i32).max(0);
         let content_width =
             (inner_width - 2 * INLINE_TABLE_OUTER_MARGIN as i32).max(col_count as i32) as u32;
+        let inherited_line =
+            creation_line::for_empty(self, empty_para, default_char_shape_id, inner_width);
 
         let (table, added_border_fill) = self.build_inline_table(
             content_width,
@@ -1293,6 +1298,7 @@ impl DocumentCore {
             row_heights_hu,
             default_char_shape_id,
             default_para_shape_id,
+            inherited_line,
             InlineTableAnchor::Cell,
         )?;
 
