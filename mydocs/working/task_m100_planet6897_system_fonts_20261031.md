@@ -1726,3 +1726,33 @@ PDF 대비 RGB 절대 차이는 후보가 각각 소폭 크다
 (`fresh-base-sample16-2024-pixel-differences.log`). 점수가 같다는 이유로
 픽셀이 같거나 미세 차이가 해소됐다고 판정하지 않으며, run 분할 후 실제 그리기
 원점을 더 정밀하게 확인한다.
+
+재빌드한 같은 기준의 sample16 HWPX 전 64쪽은 raw 하락이 없었고 PNG가 다른
+쪽은 세 쪽이다(`fresh-base-sample16-hwpx-comparison.tsv`). 출력 좌표 추적에서
+글줄 분할 전후 같은 위치를 두 `f32` 값의 합으로 계산해 서로 다른 좌표로
+변환하는 경우를 확인했다. 글꼴이 필요 없는 독립 계산 재현은 기존 계산에서 실패하고
+합산 후 변환 시 통과했다(`native-run-origin-old-fails.log`,
+`native-run-origin-rounding-contract.log`). 현재 Native Skia의 글자·배경·선·표식
+원점을 같은 순서로 변환하는 보정을 적용했으며, 최소 글꼴 집중 검사와 실제 출력
+대조가 끝나기 전이므로 시각 회귀 해결로 판정하지 않는다.
+
+검증 중 `upstream/devel`에 #8417이 병합됐다(`da39c53661`). Windows의 CFB
+스트림 경로 구분자를 정규화하는 테스트 보정이며 현재 브랜치의 기존 변경과는
+파일이 겹치지 않는다. 실행 중인 컴파일을 마친 뒤 새 base로 리베이스하고 해당
+기능과 현재 작업을 함께 재검증한다.
+
+기존 고정 실행 파일 `rhwp-localized-hft-family-candidate`의 시스템 전체 글꼴
+Native 측정은 17개 대상 전쪽을 완료했다(`current-preserve-native.log`,
+`current-preserve-native-status.json`). 제출된 기존 TSV 2,153행과의 비교에서
+73행 하락, 기준 정밀도 부족 30행을 확인했다
+(`current-preserve-native-complete-comparison.log`,
+`current-preserve-native-partial-comparison.tsv`). 이는 새 좌표 보정 전 실행
+파일의 결과이며 현 작업 트리의 측정으로 취급하지 않는다. 정확한 현재 비교에는
+새 실행 파일과 같은 기준 PDF 및 시스템 글꼴 환경이 필요하다.
+
+#8389 원 PR 본문을 다시 조회해 sample16 2022의 HWP와 독립 Print PDF SHA-256이
+현재 파일의 `fec3671c9a83cb8388cbdaab38754cb17a8da54d0314ca7e3f56860e871506fe`,
+`c4e05635726869d737f1640db4e4f29c868df9e1c31e350b0b06e115fd210b33`과 각각
+일치함을 확인했다. 기준 파일 변경을 현재 차이의 원인으로 간주하지 않는다.
+원 PR 본문 조회본은 `output/pr-review/planet6897-ordered-20261031/pr8389-remote-body.md`에
+보관했다.

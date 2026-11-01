@@ -24,6 +24,9 @@ mod lines;
 mod marks;
 mod monochrome;
 mod overlap;
+mod positions;
+
+use positions::device_x;
 
 pub(super) struct SkiaTextReplay<'a> {
     pub(super) canvas: &'a Canvas,
@@ -411,7 +414,7 @@ impl SkiaTextReplay<'_> {
                     for &(left, right) in &segments {
                         canvas.draw_rect(
                             Rect::from_xywh(
-                                bbox.x as f32 + left as f32,
+                                device_x(bbox.x, left),
                                 y as f32 - font_size,
                                 (right - left) as f32,
                                 font_size * 1.2,
@@ -463,7 +466,7 @@ impl SkiaTextReplay<'_> {
                                 // 공백·원문 전진은 유지하고 blob은 방향 구간의 실제 표시 원점에 그린다.
                                 let (end_start, end_text) = &clusters[span.end - 1];
                                 let end = end_start + end_text.chars().count();
-                                let char_x = bbox.x as f32 + span_x(*char_idx, end) as f32 + dx;
+                                let char_x = device_x(bbox.x, span_x(*char_idx, end)) + dx;
                                 canvas.save();
                                 canvas.translate((char_x, y as f32 + dy + span.baseline_offset));
                                 if has_ratio {
@@ -490,7 +493,7 @@ impl SkiaTextReplay<'_> {
                             continue;
                         }
                         let cluster_offset = span_x(*char_idx, *char_idx + cluster.chars().count());
-                        let char_x = bbox.x as f32 + cluster_offset as f32 + dx;
+                        let char_x = device_x(bbox.x, cluster_offset) + dx;
                         if cluster == "-" {
                             if let Some((start, end, y_offset, stroke)) =
                                 crate::renderer::overlapping_dash_leader_segment(
@@ -560,7 +563,7 @@ impl SkiaTextReplay<'_> {
                         }
                         if is_middle_dot(cluster) {
                             let advance = cluster_advance(*char_idx, cluster);
-                            let cx = bbox.x as f32 + cluster_offset as f32 + advance / 2.0 + dx;
+                            let cx = device_x(bbox.x, cluster_offset) + advance / 2.0 + dx;
                             let cy = y as f32
                                 - font_size
                                     * crate::renderer::render_tree::MIDDLE_DOT_CY_OFFSET_EM as f32
@@ -903,8 +906,8 @@ impl SkiaTextReplay<'_> {
                 }
 
                 for &(left, right) in &segments {
-                    let start_x = bbox.x as f32 + left as f32;
-                    let end_x = bbox.x as f32 + right as f32;
+                    let start_x = device_x(bbox.x, left);
+                    let end_x = device_x(bbox.x, right);
                     if !matches!(style.underline, UnderlineType::None) && text_width > 0.0 {
                         // COLORREF 0 은 미지정이 아니라 검정 — svg.rs 와 같은 계약.
                         let color = colorref_to_skia(style.underline_color, 1.0);
@@ -1005,10 +1008,10 @@ impl SkiaTextReplay<'_> {
                     if leader.fill_type == 0 {
                         continue;
                     }
-                    let x1 = bbox.x as f32 + leader.start_x as f32;
+                    let x1 = device_x(bbox.x, leader.start_x);
                     let leader_end_x =
                         clamp_tab_leader_end_x(text, &char_positions, leader, font_size as f64);
-                    let x2 = bbox.x as f32 + leader_end_x as f32;
+                    let x2 = device_x(bbox.x, leader_end_x);
                     let line_y = y as f32 - font_size * 0.35;
                     let color = colorref_to_skia(style.color, 1.0);
                     match leader.fill_type {
