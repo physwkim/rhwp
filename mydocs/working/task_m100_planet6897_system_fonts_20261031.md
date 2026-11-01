@@ -1595,3 +1595,12 @@ Native 출력에 대한 결과이며 제출 당시 TSV 및 fresh WASM의 별도 
 두 RHWP PNG는 동일하지 않으며 RGB 차이 15픽셀은 글자가 있는
 `(182,638)-(330,651)` 영역에 분포한다(`handbook-hwpx-p145-image-diff.log`).
 해당 원본은 별도 PR의 보정 범위이고 이번에는 기존 PR 보존 검증으로만 다룬다.
+
+#8040 독립 PDF 네 쪽의 숫자와 주요 원문자를 `pypdf` 텍스트 연산 및 각
+글꼴의 `FontDescriptor`로 다시 집계했다. `1`은 각 쪽에서 `/INPILL+Gulim`과
+하나 이상의 Type3 글꼴로 함께 나타난다. 원문자 `㉠`~`㉤`는 추출된 사례에서
+Gulim이다(`issue8040-independent-pdf-font-census-resolved.log`, 글꼴 리소스
+`issue8040-pdf-resource-fonts.log`). 같은 문자라는 이유로 모든 숫자에 Gulim을
+선택하거나 글꼴 이름이 깨져 보이는 `/BaseFont`만 근거로 공급 프로그램을
+단정하지 않는다. PyMuPDF는 이 PDF의 일부 CID 글꼴에 대해 타입 오류를 출력하므로
+그 도구로 작성한 전체 글꼴 집계는 근거에서 제외했다.
