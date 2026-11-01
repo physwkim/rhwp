@@ -150,7 +150,7 @@ def cached_font_faces(vs, directory: Path, source: Path, digest: str):
     metadata = directory / f'{digest}.json'
     try:
         value = json.loads(metadata.read_text(encoding='utf-8'))
-        if value.get('sourceSha256') != digest or value.get('schemaVersion') != 1:
+        if value.get('sourceSha256') != digest or value.get('schemaVersion') != 2:
             return None
         faces = value.get('faces')
         count = value.get('faceCount')
@@ -193,7 +193,7 @@ def cached_font_faces(vs, directory: Path, source: Path, digest: str):
 
 
 def font_source_files(directory: Path):
-    """등록된 디렉터리 링크를 따라가되 같은 물리 디렉터리를 반복하지 않는다."""
+    """파일·등록 디렉터리 링크를 읽고 같은 물리 디렉터리를 반복하지 않는다."""
     pending = [directory]
     visited = set()
     while pending:
@@ -204,6 +204,10 @@ def font_source_files(directory: Path):
             if identity in visited:
                 continue
             visited.add(identity)
+            if current.is_file():
+                if current.suffix.lower() in {'.ttf', '.otf', '.ttc', '.woff', '.woff2'}:
+                    yield current
+                continue
             entries = sorted(current.iterdir())
         except OSError:
             continue
@@ -218,7 +222,9 @@ def font_source_files(directory: Path):
 
 def valid_font_repairs(repairs) -> bool:
     """공급본에 허용한 수정만 캐시에서 수용한다. 다른 손상은 숨기지 않는다."""
-    allowed = {'cmap-format4-terminal-notdef', 'drop-embedded-bitmap-strikes'} | {f'empty-vtt-source-table:TSI{i}' for i in range(6)}
+    allowed = {'cmap-format4-terminal-notdef', 'drop-embedded-bitmap-strikes',
+               'post-format2-glyph-count',
+               'woff-to-sfnt', 'woff2-to-sfnt'} | {f'empty-vtt-source-table:TSI{i}' for i in range(6)}
     return (isinstance(repairs, list) and all(isinstance(value, str) for value in repairs)
             and len(repairs) == len(set(repairs)) and set(repairs) <= allowed)
 
@@ -268,6 +274,7 @@ def font_catalog(vs, root: Path, font_paths, base: Path) -> Path:
                     terminal_cmap = repair_terminal_cmap(length_cmap or raw_cmap, font['maxp'].numGlyphs) if raw_cmap is not None else None
                     repaired_cmap = terminal_cmap or length_cmap
                     repaired_maxp = repair_true_type_zone_count(font.reader['maxp']) if 'maxp' in font and 'glyf' in font else None
+                    repaired_post = repair_post_format2_glyph_count(font)
                     vtt_tables = empty_vtt_tables(font)
                     dropped = embedded_bitmap_strike_tags(font.reader.keys())
                     excluded_tables = sorted(set(vtt_tables) | dropped)
@@ -277,17 +284,23 @@ def font_catalog(vs, root: Path, font_paths, base: Path) -> Path:
                     repairs += [f'empty-vtt-source-table:{tag}' for tag in vtt_tables]
                     if dropped:
                         repairs.append('drop-embedded-bitmap-strikes')
+                    # Canvas와 PUA 계측에 같은 프로그램을 전달한다. 브라우저는
+                    # WOFF를 읽지만 SFNT 계측기는 압축 컨테이너를 읽지 않는다.
+                    web_font = font.flavor in {'woff', 'woff2'}
+                    if web_font:
+                        repairs.append(f'{font.flavor}-to-sfnt')
                     # Preserve original SFNT payloads while aligning browser tables.
                     misaligned_sfnt = font.flavor is None and any(
                         table.offset % 4 for table in font.reader.tables.values())
                     repairs += ['sfnt-table-alignment'] if misaligned_sfnt else []
-                    if collection or repaired_cmap is not None or excluded_tables or misaligned_sfnt or repaired_maxp is not None:
+                    repairs += ['post-format2-glyph-count'] if repaired_post is not None else []
+                    if collection or repaired_cmap is not None or excluded_tables or misaligned_sfnt or repaired_maxp is not None or repaired_post is not None or web_font:
                         resource_dir.mkdir(parents=True, exist_ok=True)
                         path = resource_dir / f'{digest}-{index}.ttf'
                         temporary = resource_dir / f'.{digest}-{index}-{os.getpid()}-{uuid.uuid4().hex}.ttf'
                         try:
                             # 원본 SFNT 테이블을 보존하고 완성한 face만 원자적으로 공개한다.
-                            write_font_face(font, temporary, repaired_cmap, excluded_tables, repaired_maxp=repaired_maxp)
+                            write_font_face(font, temporary, repaired_cmap, excluded_tables, repaired_maxp=repaired_maxp, repaired_post=repaired_post)
                             os.replace(temporary, path)
                         finally:
                             temporary.unlink(missing_ok=True)
@@ -299,16 +312,20 @@ def font_catalog(vs, root: Path, font_paths, base: Path) -> Path:
                                     'nameRecordErrors': name_errors,
                                     'repairs': repairs}
                     records.append(face)
-                    cached_records.append({**face, 'cacheKind': 'derived' if collection or repaired_cmap is not None or excluded_tables or misaligned_sfnt or repaired_maxp is not None else 'source'})
+                    cached_records.append({**face, 'cacheKind': 'derived' if collection or repaired_cmap is not None or excluded_tables or misaligned_sfnt or repaired_maxp is not None or repaired_post is not None or web_font else 'source'})
                 resource_dir.mkdir(parents=True, exist_ok=True)
                 vs.write_json_atomic(resource_dir / f'{digest}.json',
-                                     {'schemaVersion': 1, 'sourceSha256': digest,
+                                     {'schemaVersion': 2, 'sourceSha256': digest,
                                       'faceCount': len(cached_records), 'faces': cached_records})
             finally:
                 if collection:
                     collection.close()
                 else:
                     fonts[0].close()
+    # 캐시된 목록도 실제 공급 SFNT의 CFF 여부를 확인한다.
+    for record in records:
+        with Path(record['path']).open('rb') as program:
+            record['openTypeCff'] = program.read(4) == b'OTTO'
     path = base / 'font-catalog.json'
     vs.write_json_atomic(path, {'faces': records})
     return path
@@ -335,11 +352,11 @@ def font_family_names(font) -> tuple[list[str], list[dict]]:
     return sorted(names), errors
 
 
-def write_font_face(font, path: Path, repaired_cmap: bytes | None, excluded_tables=(), *, repaired_maxp=None) -> None:
+def write_font_face(font, path: Path, repaired_cmap: bytes | None, excluded_tables=(), *, repaired_maxp=None, repaired_post=None) -> None:
     """원본 SFNT 테이블을 복사한다. 글리프·메트릭·경계·날짜를 재컴파일하지 않는다."""
     from fontTools.ttLib.sfnt import SFNTWriter
     # TTFont.save는 읽어 둔 테이블을 재컴파일하고 CFF 전체의 bbox를 계산한다.
-    # face 공급에는 directory/checksum 갱신과 명시한 cmap 종료 항목 수정만 필요하다.
+    # face 공급에는 directory/checksum 갱신과 명시한 cmap·maxp·post 보정만 사용한다.
     tags = sorted(tag for tag in font.reader.keys() if tag not in excluded_tables)
     with path.open('wb') as output:
         writer = SFNTWriter(output, len(tags), font.sfntVersion)
@@ -348,9 +365,27 @@ def write_font_face(font, path: Path, repaired_cmap: bytes | None, excluded_tabl
                 writer[tag] = repaired_cmap
             elif tag == 'maxp' and repaired_maxp is not None:
                 writer[tag] = repaired_maxp
+            elif tag == 'post' and repaired_post is not None:
+                writer[tag] = repaired_post
             else:
                 writer[tag] = font.reader[tag]
         writer.close()
+
+
+def repair_post_format2_glyph_count(font) -> bytes | None:
+    """이름 표의 글리프 수가 maxp와 다르면 이름 표만 다시 작성한다."""
+    if 'post' not in font or 'maxp' not in font:
+        return None
+    raw = font.reader['post']
+    if len(raw) < 34 or raw[:4] != b'\x00\x02\x00\x00':
+        return None
+    count = font['maxp'].numGlyphs
+    if int.from_bytes(raw[32:34], 'big') == count:
+        return None
+    repaired = font['post'].compile(font)
+    if len(repaired) < 34 or int.from_bytes(repaired[32:34], 'big') != count:
+        raise ValueError('글꼴 이름 표의 글리프 수를 복구하지 못했습니다.')
+    return repaired
 
 
 EMBEDDED_BITMAP_STRIKE_TAGS = frozenset({'EBDT', 'EBLC', 'EBSC'})
@@ -453,12 +488,15 @@ def repair_terminal_cmap(data: bytes, glyph_count: int) -> bytes | None:
     return bytes(repaired) if changed else None
 
 
-def export_wasm_png(vs, root, hwp, package, base, selected, font_paths, environment, compat, dpi, workers):
+def export_wasm_png(vs, root, hwp, package, base, selected, font_paths, environment, compat, dpi, workers,
+                    observed_font_receipt=None, *, linked_images=None):
     import sys
     catalogue = font_catalog(vs, root, font_paths, base)
     options = base / 'canvas-options.json'
     vs.write_json_atomic(options, {'pages': selected, 'workers': workers, 'scale': dpi / 96.0,
                                   'compat': compat, 'fontEnvironment': str(environment) if environment else None,
+                                  'observedFontReceipt': str(observed_font_receipt) if observed_font_receipt else None,
+                                  'linkedImages': linked_images or [],
                                   'pythonExecutable': sys.executable})
     vs.run(['node', str(root / 'scripts/export-wasm-png-for-sweep.mjs'), '--pkg', str(package),
             '--input', str(hwp), '--out', str(base), '--fonts', str(catalogue), '--options', str(options)],

@@ -1,7 +1,7 @@
 //! 수용한 조각의 배치, 대기 중인 각주 처리, 커서 전진을 원래 순서대로 확정한다.
 
 use crate::renderer::typeset::{
-    hwpunit_to_px, is_synthetic_line_seg, row_geometry_table, table, BlockTableRowScan, PageItem,
+    hwpunit_to_px, is_synthetic_line_seg, table, BlockTableRowScan, PageItem,
     TableContinuationIteration, TypesetEngine, TypesetState, VisibleFloatExclusion,
     MIN_TOP_KEEP_PX,
 };
@@ -68,6 +68,26 @@ impl TypesetEngine {
         let stored_complete_extent = self
             .stored_partial_fragment_complete_extent(input, budget, &scan)
             .or_else(|| self.stored_body_closing_fragment_extent(st, input, budget, &scan));
+        let nested_opening_extent = (!is_continuation
+            && cursor_row == 0
+            && start_cut.is_empty()
+            && scan.split_block_start.is_none()
+            && std::ptr::eq(table, row_geometry_table))
+        .then(|| {
+            let frame = layout_engine.stored_nested_parent_opening_frame(
+                row_geometry_table,
+                scan.end_row.checked_sub(1)?,
+                &scan.split_end_cut,
+                &mt.row_heights,
+                styles,
+            )?;
+            let (height, last) = stored_complete_extent?;
+            let tolerance = hwpunit_to_px(2, self.dpi);
+            ((frame.height - height).abs() <= tolerance
+                && (frame.last_row_height - last).abs() <= tolerance)
+                .then_some(frame)
+        })
+        .flatten();
         let block_acceptance =
             self.accept_stored_block_frame(st, continuation, input, budget, &scan);
         let mut fragment_block_frames = mt.fragment_block_frames.clone();
@@ -849,8 +869,25 @@ impl TypesetEngine {
         // 최종 수용한 예약량을 기준으로 아직 소유되지 않은 흐름 잔여를 구한다.
         // 끝 조각의 물리 상자와 아래 바깥여백은 같은 영역을 소유한다.
         // 엄격 예산·캡션 등이 이미 예약한 몫을 다시 더하지 않는다.
-        let terminal_flow_outer_bottom =
-            (input.prepared.terminal_outer_bottom_flow - terminal_outer_bottom_overhead).max(0.0);
+        let parent_owned = (!row_cursor_is_nested)
+            .then(|| {
+                layout_engine.reflow_unrestricted_fragment_frame(
+                    table,
+                    start_cut,
+                    &split_end_cut,
+                    styles,
+                )
+            })
+            .flatten()
+            .is_none_or(|frame| frame.parent_owned);
+        if !parent_owned {
+            terminal_outer_bottom_overhead = 0.0;
+        }
+        let terminal_flow_outer_bottom = if parent_owned {
+            (input.prepared.terminal_outer_bottom_flow - terminal_outer_bottom_overhead).max(0.0)
+        } else {
+            0.0
+        };
         let host_spacing_after_only =
             input.prepared.host_spacing_after_only + terminal_flow_outer_bottom;
         // 행을 나누려고 이월했더라도 결국 통째 표로 확정하면 외곽 프레임을
@@ -1098,9 +1135,25 @@ impl TypesetEngine {
                     para_index: para_idx,
                     control_index: ctrl_idx,
                 });
+                // [#8149] 통째 첫 조각도 끝 조각과 같은 점유(아래 캡션·바깥 아래 여백·뒤 간격)로
+                // 흐름을 닫는다. host 간격 합(`host_spacing_total`)의 뒤 몫이 그 점유보다 작을
+                // 때만 모자란 만큼 더한다 — 한글문서파일형식 33쪽 표 199 는 뒤 몫 0 이라 캡션
+                // 24.0 + 바깥 아래 여백 26.5 를 빠뜨려 제목 200 이 캡션과 겹쳤다. host 앞 간격과
+                // host 줄간격은 host 간격 합의 것을 그대로 쓴다: 단 맨 위 표의 바깥 위 여백은
+                // paint 위치만 바꾸고 흐름은 바꾸지 않는다(issue_4068).
+                let host_spacing_after_in_total =
+                    (host_spacing_total - input.prepared.host_spacing_before).max(0.0);
+                let terminal_occupancy = bottom_caption_extra
+                    + terminal_outer_bottom_overhead
+                    + host_spacing_after_only
+                    + terminal_host_spacing;
                 match whole_successor_flow_end {
                     Some(end) => st.align_flow_to(end),
-                    None => st.advance_flow_by(partial_height + host_spacing_total),
+                    None => st.advance_flow_by(
+                        partial_height
+                            + host_spacing_total
+                            + (terminal_occupancy - host_spacing_after_in_total).max(0.0),
+                    ),
                 }
             } else {
                 self.record_stored_fragment_rows(
@@ -1176,7 +1229,7 @@ impl TypesetEngine {
             );
             // [#7677] 쪽을 넘겨 온 표의 마지막 조각 뒤 host 글줄은 여기서 흐름에 예약한다 —
             // 흐름은 방금 조각 하단 + 바깥 아래 여백에 섰다(한/글이 그 줄을 두는 자리).
-            if is_continuation {
+            if is_continuation && input.prepared.computed_host_tail.is_none() {
                 if flow_after_terminal_advance.is_finite() {
                     terminal_host_push +=
                         (st.current_height - flow_after_terminal_advance).max(0.0);
@@ -1857,6 +1910,28 @@ impl TypesetEngine {
                 }
             });
         commit_fragment(st, caption_extra + partial_height, false, None);
+        // 부모 프레임만 현재 쪽에 남은 경우, 독립 자식의 이월은 뒤 본문까지
+        // 소유하지 않는다. 수용한 소스 컷의 사실로 기존 후속 선배치를 공유한다.
+        if !row_cursor_is_nested
+            && ctrl_idx + 1 == input.source.paragraph.controls.len()
+            && layout_engine
+                .reflow_unrestricted_fragment_frame(table, start_cut, &split_end_cut, styles)
+                .is_some_and(|frame| frame.parent_owned && !frame.external_content_owned)
+        {
+            let host_end = st.current_height;
+            if self.prefill_computed_float_successors(
+                st,
+                para_idx,
+                input.source.paragraph,
+                input.source.paragraphs_all,
+                input.source.composed_all,
+                styles,
+            ) {
+                // 수용한 부모 프레임의 끝을 paint에도 전달한다. 빈 호스트의
+                // 글줄 높이만 재사용하면 뒤 본문이 부모 칸 안으로 되돌아간다.
+                st.record_stored_paragraph_flow_end(para_idx, host_end);
+            }
+        }
         if !is_continuation && stored_complete_extent.is_some() {
             // 내용 컷과 독립적으로 인증한 첫 조각 상자가 실제 지면을 차지했다.
             // 다음 조각의 여백은 같은 커서 사실을 예산·배치가 함께 소비한다.
@@ -2268,7 +2343,9 @@ impl TypesetEngine {
             .or_else(|| end_row_height_override
             // 완전히 소비한 것으로 확인된 원본 행은 다음 행으로 전진한다.
             // 수용한 앞부분에 병합 셀 소유자의 공간이 이미 반영되어 있으므로 이전 행의 빈 꼬리로 새 행의 상자를 대체하지 않는다.
-            .filter(|_| !layout_engine.stored_heading_before_inline_frame_cut(
+            // 자식의 저장 컷이 닫는 첫 물리 띠는 전체 논리 행의 소비량이 아니다.
+            // 이 띠를 원본 최소에서 빼 남은 내용보다 작은 상자를 이월하지 않는다.
+            .filter(|_| nested_opening_extent.is_none() && !layout_engine.stored_heading_before_inline_frame_cut(
                 table, end_row.saturating_sub(1),
                 if end_row - 1 == cursor_row { start_cut } else { &[] }, &next_cut, styles,
             ) && !closes_original_body_frame && !complete_source_row_frame && !first_fragment_blank_band && !source_frame_trailing_trim_applied && stored_row_frame.is_none()

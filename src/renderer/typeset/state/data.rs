@@ -30,6 +30,8 @@ pub(in crate::renderer::typeset) struct StateView {
     pub(in crate::renderer::typeset) current_height: f64,
     /// 현재 단 시작 시점의 논리 높이 (px)
     pub(in crate::renderer::typeset) current_start_height: f64,
+    /// 첫 물리 쪽의 모든 단이 공유하는 인증된 저장 시작 밴드.
+    pub(in crate::renderer::typeset) stored_initial_column_band: f64,
     /// 현재 단에 미주 흐름 항목이 포함되어 있는지 여부
     pub(in crate::renderer::typeset) current_endnote_flow: bool,
     /// [#5886] 현재 단에 문단-사이 compact 되감김을 넣었으면, 이후 문단도
@@ -156,6 +158,10 @@ pub(in crate::renderer::typeset) struct StateView {
     pub(in crate::renderer::typeset) paragraph_origins:
         std::collections::HashMap<usize, crate::renderer::pagination::ParagraphOrigin>,
     pub(super) pending_paragraph_origins: Vec<PendingParagraphOrigin>,
+    pub(in crate::renderer::typeset) host_compositions: std::collections::HashMap<
+        usize,
+        std::sync::Arc<crate::renderer::composer::ComposedParagraph>,
+    >,
     pub(in crate::renderer::typeset) stored_paragraph_flow_ends:
         std::collections::HashMap<usize, f64>,
     /// 쪽 상단의 첫 문단이 이미 예약한 저장 앞 간격.
@@ -167,7 +173,7 @@ pub(in crate::renderer::typeset) struct StateView {
     >,
     /// [#7330] 현재 단에서 확정한 자리차지 표가 민 host 첫 글줄의 남은 앞 간격.
     pub(in crate::renderer::typeset) float_pushed_line_spacings:
-        std::collections::HashMap<usize, f64>,
+        std::collections::HashMap<usize, crate::renderer::float_placement::FloatPushedFirstLine>,
     /// 단 상대 TAC 물리 하단. 저장 host 높이와 별개로 다음 어울림 후보 줄을 제한한다.
     pub(in crate::renderer::typeset) inline_box_flow_bottom: f64,
     /// 같은 문단의 선행 RowBreak 표가 continuation 을 만들 때 후행 co-anchored 표를
@@ -183,6 +189,9 @@ pub(in crate::renderer::typeset) struct StateView {
     /// 단일 컬럼·caption 보유 picture 형상으로 한정한다.
     pub(in crate::renderer::typeset) deferred_next_page_square_pictures:
         Vec<DeferredSquarePictureControl>,
+    /// 이어지는 쪽에서 저장 reset 으로 끝낸 문단 조각 (문단, 시작 줄). 그 조각 안 표시의
+    /// 본문 각주는 조각 경계 판정이 이미 계상했으므로 표시가 놓인 쪽에 둔다.
+    pub(in crate::renderer::typeset) stored_reset_note_fragments: Vec<(usize, usize)>,
     /// 현재 호스트를 남기고 다음 쪽의 저장 상단 프레임만 이월한다.
     pub(in crate::renderer::typeset) deferred_next_page_stored_frames:
         Vec<crate::renderer::typeset::DeferredStoredFrameControl>,
@@ -255,6 +264,8 @@ pub(in crate::renderer::typeset) struct StateView {
     pub(in crate::renderer::typeset) hide_empty_line: bool,
     /// [Task #362] 현재 페이지에서 감춘 빈 줄 수 (페이지마다 reset, 최대 2).
     pub(in crate::renderer::typeset) hidden_empty_lines: u32,
+    /// 숨긴 첫 줄로 달라진 물리 쪽 경계가 저장 경계와 다시 맞을 때까지 유지한다.
+    pub(in crate::renderer::typeset) hidden_line_reflow_active: bool,
     /// [Task #362] 감춘 빈 줄이 적용된 페이지 인덱스 (페이지 변경 감지용).
     pub(in crate::renderer::typeset) hidden_empty_page_idx: usize,
     /// [Task #362] hide_empty_line 으로 감춘 paragraph 인덱스 (PaginationResult 에 포함).
