@@ -1570,3 +1570,10 @@ HFT로 선언돼 있지만 실제 선택은 `Malgun Gothic` 대체다. 설치된
 `hanyang-symbol-face-comparison.log`). 따라서 family 이름 또는 동일한 내부
 글리프 이름만 근거로 중고딕 OTF의 해당 글리프를 강제할 수 없다. 원본의
 실제 fallback 계약과 다른 문자·글꼴의 반례를 더 확인한다.
+
+새 후보의 sample16 2024 HWP 64쪽을 원 PR 실행 파일과 같은 시스템 글꼴로
+재출력해 비교했다. 독립 PDF의 각 쪽 래스터 SHA가 같고 raw가 하락한 쪽은
+0쪽이며 후보 최저는 51쪽의 `99.904534606205%`다
+(`source-bold-boundary-sample16-2024-comparison.tsv`). 이 결과는 동일 환경의
+Native 대조이며, 제출 당시 TSV 수치와 fresh WASM의 별도 무하락 검증을
+대신하지 않는다. 중첩 표 9쪽의 새 후보 PNG SHA는 직전 후보와 같다.
