@@ -1558,3 +1558,15 @@ PDF의 문자 원점을 함께 추출했다(`symbol-eight-regions-source-positio
 렌더 트리의 반올림 좌표만으로 최종 글리프 원점이 완전히 같다고 단정하지 않는다.
 현재 후보로 2024 HWP/HWPX 각 64쪽과 중첩 표 전17쪽도 동일 기준으로
 재출력 중이다. 산출 완료와 원 PR 비교 결과는 별도로 확인한다.
+
+새 후보로 중첩 표 전17쪽을 재출력하고 같은 시스템 글꼴 환경의 원 PR과
+PDF 래스터 SHA까지 확인해 정밀 대조했다. 9쪽 한 쪽만
+`99.790593495145% → 99.788828217498%`로 하락하며 다른 쪽은 같다
+(`source-bold-boundary-nested-comparison.tsv`). 기호 슬롯은 `한양중고딕`
+HFT로 선언돼 있지만 실제 선택은 `Malgun Gothic` 대체다. 설치된 원 family의
+분할 OTF `SPJGT.otf`에는 `hft3438` 윤곽이 있어도 Unicode `※` cmap이 없고,
+그 윤곽은 독립 Print의 같은 문자와 다르다. 반면 독립 Print의 윤곽은 신명조
+원본의 확인된 기호 윤곽과 같다(`hanyang-junggothic-symbol-outline-check.log`,
+`hanyang-symbol-face-comparison.log`). 따라서 family 이름 또는 동일한 내부
+글리프 이름만 근거로 중고딕 OTF의 해당 글리프를 강제할 수 없다. 원본의
+실제 fallback 계약과 다른 문자·글꼴의 반례를 더 확인한다.
