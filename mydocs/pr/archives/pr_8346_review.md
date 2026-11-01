@@ -17,9 +17,9 @@
 
 ## 2026-11-01 리베이스 후 전체 회귀
 
-HWP3 찾아보기·개요 번호 검사 `issue_8304_hwp3_index_mark` 9건은 모두 통과했다. 최소 시스템 글꼴 환경에서 라이선스가 확인된 저장소 테스트 글꼴을 명시적으로 제공해 전체 12,349건을 실행했다. 12,347건이 통과했고 편람 261쪽 JPEG 채움 색상 HWP·HWPX 검사 2건이 실패했다. 충돌한 PDF 세션의 HWP·HWPX 메타데이터 예산 검사는 모두 통과했다. [전체 로그](../../../output/pr-review/planet6897-ordered-20261031/rebase-full-minfont-verified-nextest.log).
+HWP3 찾아보기·개요 번호 검사 `issue_8304_hwp3_index_mark` 9건은 모두 통과했다. 최소 시스템 글꼴 환경에서 라이선스가 확인된 저장소 테스트 글꼴을 명시적으로 제공해 전체 12,349건을 실행했다. 12,347건이 통과했고 편람 261쪽 JPEG 채움 색상 HWP·HWPX 검사 2건이 실패했다. 두 실패는 오래된 JPEG 인코더 캐시를 재컴파일한 뒤 집중 검사에서 모두 통과했다 ([재검사 로그](../../../output/pr-review/planet6897-ordered-20261031/jpeg-clean-cache-focused.log)). 충돌한 PDF 세션의 HWP·HWPX 메타데이터 예산 검사는 모두 통과했다. [전체 로그](../../../output/pr-review/planet6897-ordered-20261031/rebase-full-minfont-verified-nextest.log).
 
-실패 원인 분석과 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
+재컴파일 후 전체 회귀와 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
 
 ## 변경 주장과 검토 관점
 
