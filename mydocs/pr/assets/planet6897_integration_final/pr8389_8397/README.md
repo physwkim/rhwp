@@ -9,6 +9,10 @@ Visual Sweep 소수 둘째 자리 표시값을 비교하며, 현재 표시값이
 - Native 실행 파일 SHA-256: `d53e4dac28839e01f4c6bf19761c4bbc181ef70a7a38eb65abf6f6c4050b96fc`.
 - 같은 입력과 독립 한컴 Print PDF를 96 DPI로 측정했다. 시스템 글꼴을 사용하고 기존
   Print 대체 글꼴 환경은 해당 원본에 적용했다. 글꼴 파일은 배포하지 않는다.
+- 편람 HWP/HWPX에는 [대체 글꼴 설정](handbook-font-environment.json)을, sample16의
+  2020/2024 기준에는 각각 [2020 설정](hwp3-2020-font-environment.json)과
+  [2024 설정](hwp3-2024-font-environment.json)을 적용했다. 이 설정은 글꼴 프로그램을
+  포함하지 않으며 나머지 입력은 별도 치환 없이 시스템 글꼴을 사용했다.
 - [Native 전체 기준 행 대조](native-display-comparison.tsv): 2,153행, 중복 제거 후
   1,770쪽, 누락 0쪽, 표시값 하락 0행. 각 행에 원본 기준 TSV 경로를 남겼다.
 - fresh WASM 전쪽 비교는 현재 진행 중이며 완료 후 결과를 이 문서에 추가한다.
