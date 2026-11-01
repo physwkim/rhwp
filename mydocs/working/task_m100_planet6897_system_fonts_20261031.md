@@ -1626,3 +1626,23 @@ paragraph 17, nested `[0,5,0]`, 글자 모양 36의 영문 슬롯이다. 원본�
 (`sample16-gif-jpeg-phase-comparison.log`). 이는 원 PR이 다른 중간 RGB 입력이나
 전달 경로를 거쳤을 가능성을 보여 주지만 어느 단계에서 달라졌는지는 확정하지
 않는다. 진단은 제품 코드를 바꾸지 않았으며 raw 무하락을 대신하지 않는다.
+
+JPEG 차이의 원본 입력과 압축 설정을 고정 실행 파일에서 직접 관측했다.
+원 PR로 사용한 `base-rhwp`의 `encode_print_jpeg`에 전달된 GIF 바이트는
+HWPX `BinData/image1.gif`와 SHA-256이 같고, quality 70·RGB555 확장 사용도
+확인했다(`base-gif-encoder-observe.log`). JPEG encoder에 전달된 133×40 RGB
+바이트의 SHA-256은 현재 코드의 독립 재현과 둘 다
+`2cd9f142253b147987d6796d5b3f60201318a275efe9e6559a2b9ea74a0a8b2c`다
+(`base-gif-rgb-observe.log`). 양자화표·Huffman 표와 scan 헤더도 일치하지만
+entropy는 다르다(`sample16-gif-jpeg-structure-comparison.log`). 두 실행 파일의
+JPEG 하단 평균 함수 기계 코드 크기는 다르지만 그 차이만으로 빌드 오류나
+원본 버전을 단정할 수 없다. #8389 직전 인코더 소스를 별도 컴파일해 같은
+RGB를 인코딩한 결과는 원 PR 실행 파일이 아니라 후보와 같았다
+(`pre8389-jpeg-encoder-reproduction.log`). 선택 표본 `Nearest`도 어느 쪽과도
+일치하지 않았다(`sample16-gif-jpeg-nearest-comparison.log`).
+
+원 PR 재출력에 사용한 실행 파일과 고정 커밋 소스의 대응을 확인하기 위해
+깨끗한 `99a176b7cb` 작업트리와 고정 `target/pr-review`, 빌드 잡 8개로 실행
+파일을 다시 빌드하고 있다(`base-99a-fresh-build.log`). 기존 동일 환경
+비교는 이 실행 파일의 JPEG 출력과 다시 대조하기 전까지 원 PR의 최종 기준으로
+확정하지 않는다. 기존 전쪽 실행은 고정된 이전 실행 파일의 결과로 보존한다.
