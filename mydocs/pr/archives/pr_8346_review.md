@@ -84,3 +84,15 @@ HWP3 탭의 저장 문자 오프셋을 HWP5 직렬화와 통일한 것으로 원
 fresh WASM **98.22%**다([Native 로그](../../../output/pr-review/planet6897-ordered-20261031/issue8304-hwp5-current-native.log),
 [WASM 로그](../../../output/pr-review/planet6897-ordered-20261031/issue8304-hwp5-current-wasm.log)).
 이는 HWP3 하단 탭 차이가 해결됐다는 근거가 아니다.
+
+추가 원인 진단에서 3쪽 `\\HNC\\USER`의 HWP3 원본은 `견명조`를 사용하고
+한컴 저장 HWP5 대응본은 `한양견명조`를 사용한다. 두 글자 모양의 크기·장평·자간은 같지만,
+글꼴 프로그램을 공급하지 않은 동일 WASM 진단에서 첫째의 ASCII 전진은 글자마다 7.5px이고
+둘째는 글자별로 다르며 전체 폭은 각각 67.2px과 92.2px이다. 시스템에는 두 이름에 대응하는
+별도 OTF가 등록돼 있다. 원본을 변경하지 않고 진단 환경에서 `견명조`를 `한양견명조`로
+대체했을 때 Native 3쪽 raw는 **94.73% → 99.91%**였으며 하단 설명의 시작점도 기준에
+가까워졌다([review](../../../output/pr-review/planet6897-ordered-20261031/issue8304-font-diagnostic/issue8304-font-diagnostic/review/review_003.png),
+[overlay](../../../output/pr-review/planet6897-ordered-20261031/issue8304-font-diagnostic/issue8304-font-diagnostic/overlay/overlay_003.png)).
+이것은 원인 분리를 위한 임시 설정이며 제품의 자동 글꼴 선택이나 전쪽 무회귀 검증 결과가 아니다.
+HWP3의 기존 ASCII 반각 계약과 실제 선택된 글꼴 프로그램의 경계를 함께 확인한 후 공통 경로의
+수정 여부를 결정한다.
