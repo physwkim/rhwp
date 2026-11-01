@@ -885,7 +885,13 @@ impl DocumentCore {
         page_num: u32,
         options_json: &str,
         native_observer: Option<
-            &dyn Fn(&str, char, bool, bool) -> crate::renderer::font_decision::BackendDecision,
+            &dyn Fn(
+                &str,
+                char,
+                bool,
+                bool,
+                bool,
+            ) -> crate::renderer::font_decision::BackendDecision,
         >,
         native_unavailable_reason: &'static str,
     ) -> Result<String, HwpError> {
@@ -908,7 +914,13 @@ impl DocumentCore {
         page_num: u32,
         requested_limits: TraceLimits,
         native_observer: Option<
-            &dyn Fn(&str, char, bool, bool) -> crate::renderer::font_decision::BackendDecision,
+            &dyn Fn(
+                &str,
+                char,
+                bool,
+                bool,
+                bool,
+            ) -> crate::renderer::font_decision::BackendDecision,
         >,
         native_unavailable_reason: &'static str,
         tree: &PageRenderTree,
@@ -1144,6 +1156,7 @@ impl DocumentCore {
                                 ch,
                                 run.style.bold,
                                 run.style.italic,
+                                run.style.source_font_is_ttf,
                             )
                         }),
                         native_unavailable_reason,

@@ -9688,8 +9688,6 @@ impl LayoutEngine {
                                 // 양쪽을 본다 — `paragraph_layout` 의 `stored_lh_covers_om`
                                 // 과 같은 술어의 형제다. 한쪽만 고치면 `#2032`/`#2075` 의
                                 // "동일 로직" 함정을 그대로 밟는다.
-                                let band_hu =
-                                    i64::from(inline_body_height_hu) + om_top_hu + om_bottom_hu;
                                 // 그리고 그 줄이 **이 표 전용**이어야 한다 —
                                 // `paragraph_layout` 의 `line_tac_table_count` 와 같은 조건.
                                 // 이 경로에는 composer 결과가 없으므로 저장 사다리로 센다:
@@ -9706,8 +9704,15 @@ impl LayoutEngine {
                                 let table_anchor_y = if inline_body_height_hu < 0x8000_0000
                                     && om_top_hu + om_bottom_hu > 0
                                     && line_tac_table_count.is_some_and(|count| count <= 1)
-                                    && (band_hu - 10..=band_hu + 10)
-                                        .contains(&i64::from(host_seg_lh))
+                                    && super::stored_tac_frame::owned_body_height(
+                                        nested_table,
+                                        hwpunit_to_px(inline_body_height_hu as i32, self.dpi),
+                                        hwpunit_to_px(host_seg_lh, self.dpi),
+                                        styles,
+                                        self.dpi,
+                                        hwpunit_to_px(10, self.dpi),
+                                    )
+                                    .is_some()
                                 {
                                     table_anchor_y
                                         + hwpunit_to_px(

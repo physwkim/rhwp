@@ -926,10 +926,11 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
             script_metrics: styles.script_metrics,
             native_pua_metrics: (!styles.has_exact_font_source(char_style_id, lang_index))
                 .then(|| {
-                    styles.native_pua_fonts.get(
+                    styles.native_pua_fonts.get_for_source(
                         cs.font_family_for_lang(lang_index),
                         cs.bold,
                         cs.italic,
+                        cs.source_ttf_for_lang(lang_index),
                     )
                 })
                 .flatten(),
@@ -948,6 +949,8 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
             top_underline_phase: None,
             fixed_glyph_advances: false,
             source_font_is_hft: cs.source_hft_for_lang(lang_index),
+            source_font_is_ttf: cs.source_ttf_for_lang(lang_index),
+            source_verified_hft_bold_tracking: cs.verified_hft_bold_tracking_for_lang(lang_index),
             source_hwp3_hft_bold: (styles.hwp3_variant || styles.source_hwp3_native)
                 && cs.source_hft_for_lang(lang_index),
             hft_print_frame: cs.hft_print_frame_for_lang(lang_index),
@@ -1063,6 +1066,9 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
                         )?,
                         font_metric_trusted: cs.font_metric_trusted_for_lang(1),
                         source_font_is_hft: cs.source_hft_for_lang(1),
+                        source_font_is_ttf: cs.source_ttf_for_lang(1),
+                        source_verified_hft_bold_tracking: cs
+                            .verified_hft_bold_tracking_for_lang(1),
                         letter_spacing: resolved_letter_spacing(styles, char_style_id, 1),
                         ratio: cs.ratio_for_lang(1),
                     }))
@@ -2511,7 +2517,13 @@ fn char_width_decision_with_hft_tracking<'a>(
                 // 합성 굵기는 실제 글꼴 폭을 바꾸지 않는다. 원본에 독립적으로
                 // 확인된 꾸밈 전진 계약이 있는 경우에만 추가 폭을 적용한다.
                 if otf_metrics.is_some_and(|font| font.needs_faux_bold(c)) {
-                    if style.source_hwp3_hft_bold || source_hft_metric {
+                    let verified_source = latin
+                        .map_or(style.source_verified_hft_bold_tracking, |slot| {
+                            slot.source_verified_hft_bold_tracking
+                        });
+                    let verified_program = verified_source
+                        && otf_metrics.is_some_and(|font| font.has_verified_hft_bold_tracking(c));
+                    if style.source_hwp3_hft_bold || source_hft_metric || verified_program {
                         font_size * 0.05
                     } else {
                         let original_face = latin
@@ -3152,6 +3164,86 @@ pub(crate) fn estimate_text_width_with_storage<S: crate::storage::Storage>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unverified_hft_otf_bold_does_not_add_original_tracking() {
+        let bytes = include_bytes!("../../../tests/fixtures/fonts/RHWPHftOutline.otf");
+        let mut programs = crate::renderer::native_pua_fonts::NativePuaFonts::default();
+        programs
+            .register_otf("Fixture", true, false, bytes, 0)
+            .unwrap();
+        let mut style = TextStyle {
+            font_family: "Fixture".into(),
+            font_size: 20.0,
+            bold: true,
+            source_font_is_hft: true,
+            native_otf_metrics: programs.get_otf("Fixture", true, false),
+            ..TextStyle::default()
+        };
+        let (source, regular_width) = {
+            let decisions = trace_char_width_decisions("가", &style);
+            (decisions[0].width_source, decisions[0].final_width_px)
+        };
+        assert_eq!(source, "nativeOtf");
+        style.source_hwp3_hft_bold = true;
+        let known_hwp3 = trace_char_width_decisions("가", &style)[0].clone();
+        assert!(
+            known_hwp3.final_width_px > regular_width,
+            "명시된 HWP3 굵기 전진은 보존하되 근거 없는 HFT 유형만으로 추가하지 않는다"
+        );
+    }
+
+    #[test]
+    fn verified_hft_bold_tracking_requires_source_and_glyph_program() {
+        let original = include_bytes!("../../../tests/fixtures/fonts/RHWPHftOutline.otf");
+        let mut renamed = original.to_vec();
+        let utf16 = |s: &str| {
+            s.encode_utf16()
+                .flat_map(u16::to_be_bytes)
+                .collect::<Vec<_>>()
+        };
+        let from = utf16("RHWP HFT Outline Fixture");
+        let to = utf16("Sinmyeong Junggothic    ");
+        assert_eq!(from.len(), to.len());
+        let mut count = 0;
+        for offset in 0..=renamed.len() - from.len() {
+            if renamed[offset..offset + from.len()] == from {
+                renamed[offset..offset + to.len()].copy_from_slice(&to);
+                count += 1;
+            }
+        }
+        assert!(count > 0, "시험 글꼴의 family 이름을 확인해야 한다");
+        let mut programs = crate::renderer::native_pua_fonts::NativePuaFonts::default();
+        programs
+            .register_otf("verified", true, false, &renamed, 0)
+            .unwrap();
+        programs
+            .register_otf("other", true, false, original, 0)
+            .unwrap();
+        let mut style = TextStyle {
+            font_size: 20.0,
+            bold: true,
+            source_font_is_hft: true,
+            native_otf_metrics: programs.get_otf("verified", true, false),
+            ..TextStyle::default()
+        };
+        assert!(style
+            .native_otf_metrics
+            .as_ref()
+            .unwrap()
+            .has_verified_hft_bold_tracking('가'));
+        let width = |style: &TextStyle| trace_char_width_decisions("가", style)[0].final_width_px;
+        let no_source = width(&style);
+        style.source_verified_hft_bold_tracking = true;
+        let verified = width(&style);
+        assert!(
+            (verified - no_source - 1.0).abs() < 0.1,
+            "장치 격자에 반올림한 추가 전진: {}",
+            verified - no_source
+        );
+        style.native_otf_metrics = programs.get_otf("other", true, false);
+        assert!((width(&style) - no_source).abs() < 1e-8);
+    }
 
     #[test]
     fn issue_4442_noto_sans_kr_regular_ascii_shared_width_uses_tracked_advances() {

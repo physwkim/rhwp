@@ -8,6 +8,39 @@ import type { HostFontData } from '../src/core/host-font-provider.ts';
 
 let serial = 0;
 
+test('같은 family의 HFT와 TTF 요청을 독립적으로 공급하고 다시 준비해도 유지한다', async () => {
+  const data = (name: string) => {
+    const file = readFileSync(new URL(`../../tests/fixtures/fonts/${name}`, import.meta.url));
+    return file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
+  };
+  const faces = ['TTF', 'CFF'].map(id => ({ id, family: 'Mixed', fullName: `Mixed ${id}`,
+    postscriptName: `Mixed-${id}`, style: 'Regular', weight: 400, slant: 'normal' as const }));
+  await setHostFontProvider({
+    async getSnapshot() { return { revision: 'source-type-mixed', faces }; },
+    async readFace(id) { return { bytes: data(id === 'TTF' ? 'RHWPHostFixture-Regular.ttf' : 'RHWPHftOutline.otf') }; },
+    subscribe() { return () => {}; },
+  });
+  const calls: Array<[boolean, number]> = [];
+  const owner = {
+    getNativePuaFontRequests: () => JSON.stringify([
+      {family: 'Mixed', bold: false, italic: false},
+      {family: 'Mixed', bold: false, italic: false, source_ttf: true},
+    ]),
+    registerNativePuaFont() { throw new Error('유형별 등록 API를 사용해야 한다'); },
+    registerNativePuaFontForSource(_family: string, _bold: boolean, _italic: boolean,
+      sourceTtf: boolean, bytes: Uint8Array) {
+      calls.push([sourceTtf, new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0)]);
+      return true;
+    },
+  };
+  try {
+    const session = new NativePuaFontSession();
+    assert.equal(await session.prepare(owner, 1, () => true, () => true), true);
+    assert.equal(await session.prepare(owner, 1, () => true, () => true), true);
+    assert.deepEqual(calls, [[false, 0x4f54544f], [true, 0x00010000]]);
+  } finally { await setHostFontProvider(null); }
+});
+
 test('굵은 HFT 요청에 실제 선택한 일반 OTF를 공급하고 세대가 바뀌면 다시 준비한다', async () => {
   const font = readFileSync(new URL('../../tests/fixtures/fonts/RHWPHftOutline.otf', import.meta.url));
   const bytes = font.buffer.slice(font.byteOffset, font.byteOffset + font.byteLength) as ArrayBuffer;

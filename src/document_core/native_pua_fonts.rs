@@ -12,6 +12,9 @@ pub struct NativePuaFontRequest {
     pub paint_families: Vec<String>,
     pub bold: bool,
     pub italic: bool,
+    /// 원본 슬롯이 명시적 TTF일 때 같은 family의 HFT와 구분한다.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub source_ttf: bool,
     /// 리터럴 공백의 프로그램은 PUA 기호 fallback과 별도로 선택한다.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub literal_figure_space: bool,
@@ -36,6 +39,7 @@ impl DocumentCore {
                         family,
                         bold: style.bold,
                         italic: style.italic,
+                        source_ttf: false,
                         literal_figure_space: false,
                     });
             }
@@ -88,15 +92,23 @@ impl DocumentCore {
         for request in self.native_pua_font_requests() {
             if let Some((bytes, index)) = provider(&request) {
                 if request.literal_figure_space {
-                    fonts.register_literal_space(
+                    fonts.register_literal_space_for_source(
                         &request.family,
                         request.bold,
                         request.italic,
+                        request.source_ttf,
                         &bytes,
                         index,
                     )
                 } else {
-                    fonts.register(&request.family, request.bold, request.italic, &bytes, index)
+                    fonts.register_for_source(
+                        &request.family,
+                        request.bold,
+                        request.italic,
+                        request.source_ttf,
+                        &bytes,
+                        index,
+                    )
                 }
                 .map_err(|message| HwpError::RenderError(message.into()))?;
             }
@@ -154,6 +166,7 @@ impl DocumentCore {
                             style.bold,
                             style.italic,
                             literal_figure_space,
+                            style.source_ttf_for_lang(slot.language_index),
                         ))
                         .or_insert(NativePuaFontRequest {
                             paint_families: crate::renderer::render_font_family_names_for_weight(
@@ -162,6 +175,7 @@ impl DocumentCore {
                             family,
                             bold: style.bold,
                             italic: style.italic,
+                            source_ttf: style.source_ttf_for_lang(slot.language_index),
                             literal_figure_space,
                         });
                 }
@@ -192,6 +206,28 @@ impl DocumentCore {
         Ok(supported)
     }
 
+    /// 원본 슬롯 유형을 함께 지정해 같은 family의 다른 프로그램과 분리한다.
+    pub fn register_native_pua_font_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, HwpError> {
+        let mut fonts = (*self.native_pua_fonts).clone();
+        let changed = fonts
+            .register_for_source(family, bold, italic, source_ttf, bytes, face_index)
+            .map_err(|message| HwpError::RenderError(message.into()))?;
+        let supported = fonts.has_program_for_source(family, bold, italic, source_ttf);
+        if changed {
+            self.native_pua_fonts = std::sync::Arc::new(fonts);
+            self.refresh_native_pua_font_layout();
+        }
+        Ok(supported)
+    }
+
     /// 실제 리터럴 공백에 선택한 SFNT만 별도 세션 메트릭으로 공급한다.
     pub fn register_literal_figure_space_font(
         &mut self,
@@ -206,6 +242,28 @@ impl DocumentCore {
             .register_literal_space(family, bold, italic, bytes, face_index)
             .map_err(|message| HwpError::RenderError(message.into()))?;
         let supported = fonts.literal_space_em(family, bold, italic).is_some();
+        if changed {
+            self.native_pua_fonts = std::sync::Arc::new(fonts);
+            self.refresh_native_pua_font_layout();
+        }
+        Ok(supported)
+    }
+
+    /// 리터럴 공백의 실제 프로그램도 원본 슬롯 유형별로 구분한다.
+    pub fn register_literal_figure_space_font_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, HwpError> {
+        let mut fonts = (*self.native_pua_fonts).clone();
+        let changed = fonts
+            .register_literal_space_for_source(family, bold, italic, source_ttf, bytes, face_index)
+            .map_err(|message| HwpError::RenderError(message.into()))?;
+        let supported = fonts.has_literal_space_for_source(family, bold, italic, source_ttf);
         if changed {
             self.native_pua_fonts = std::sync::Arc::new(fonts);
             self.refresh_native_pua_font_layout();

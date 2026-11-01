@@ -214,7 +214,10 @@ export async function prepareNativePuaFonts(owner, fonts, loadBytes) {
         const matches = fonts.filter(font => font.families.some(name =>
           `${name.toLowerCase()}|${font.weight}|${font.style}` === key));
         const cff = matches.filter(record => record.openTypeCff);
-        const records = cff.length ? [...cff, ...matches.filter(record => !record.openTypeCff)] : matches.slice(0, 1);
+        const ttf = matches.filter(record => !record.openTypeCff);
+        const records = request.source_ttf
+          ? [...ttf, ...cff]
+          : cff.length ? [...cff, ...ttf] : matches.slice(0, 1);
         const seen = new Set();
         for (const record of records) {
           if (seen.has(record.sha256)) continue;
@@ -228,10 +231,19 @@ export async function prepareNativePuaFonts(owner, fonts, loadBytes) {
               false, false, null, records.length < 2, records.length < 2);
             loaded.set(programKey, bytes);
           }
-          const register = request.literal_figure_space
+          const registerSource = request.literal_figure_space
+            ? owner.registerLiteralFigureSpaceFontForSource : owner.registerNativePuaFontForSource;
+          const registerLegacy = request.literal_figure_space
             ? owner.registerLiteralFigureSpaceFont : owner.registerNativePuaFont;
-          if (typeof register === 'function' && register.call(owner, request.family,
-            request.bold, request.italic, new Uint8Array(bytes), 0)) {
+          if (request.source_ttf && typeof registerSource !== 'function') {
+            throw Error('원본 TTF별 PUA 등록 API가 없는 WASM입니다.');
+          }
+          const registered = typeof registerSource === 'function'
+            ? registerSource.call(owner, request.family, request.bold, request.italic,
+              Boolean(request.source_ttf), new Uint8Array(bytes), 0)
+            : typeof registerLegacy === 'function' && registerLegacy.call(owner, request.family,
+              request.bold, request.italic, new Uint8Array(bytes), 0);
+          if (registered) {
             proofs.push({family: request.family, literalFigureSpace: Boolean(request.literal_figure_space), selectedFamily: family, weight: record.weight,
               style: record.style, sha256: record.sha256, sourceSha256: record.sourceSha256});
             accepted = true;

@@ -185,6 +185,7 @@ mod mapped_symbol_fonts;
 mod stored_row_fragments;
 mod text_metric_origin;
 pub(crate) use stored_row_fragments::crosses_physical_frame as stored_rows_cross_physical_frame;
+pub(crate) use text_metric_origin::regenerated_row as line_metrics_regenerated;
 pub(crate) mod stored_row_projection;
 pub(crate) mod supplemental_clusters;
 

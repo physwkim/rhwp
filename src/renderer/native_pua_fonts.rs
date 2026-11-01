@@ -52,7 +52,7 @@ pub struct NativePuaMetrics {
 #[derive(Debug)]
 pub struct NativeOtfMetrics {
     programs: Vec<NativeOtfProgram>,
-    advances: std::sync::Mutex<BTreeMap<char, Option<(f64, bool)>>>,
+    advances: std::sync::Mutex<BTreeMap<char, Option<(f64, bool, bool)>>>,
     coverage: std::sync::Mutex<BTreeMap<char, bool>>,
 }
 
@@ -63,6 +63,7 @@ struct NativeOtfProgram {
     digest: [u8; 32],
     faux_bold: bool,
     cff: bool,
+    verified_hft_bold_tracking: bool,
 }
 
 impl PartialEq for NativeOtfMetrics {
@@ -94,12 +95,18 @@ impl NativeOtfMetrics {
     }
 
     pub fn needs_faux_bold(&self, character: char) -> bool {
-        self.glyph_metric(character).is_some_and(|(_, faux)| faux)
+        self.glyph_metric(character)
+            .is_some_and(|(_, faux, _)| faux)
     }
     pub fn advance_em(&self, character: char) -> Option<f64> {
-        self.glyph_metric(character).map(|(advance, _)| advance)
+        self.glyph_metric(character).map(|(advance, _, _)| advance)
     }
-    fn glyph_metric(&self, character: char) -> Option<(f64, bool)> {
+    /// 실제 글리프 공급 프로그램이 독립 Print로 확인된 HFT 계약을 소유하는가.
+    pub fn has_verified_hft_bold_tracking(&self, character: char) -> bool {
+        self.glyph_metric(character)
+            .is_some_and(|(_, _, verified)| verified)
+    }
+    fn glyph_metric(&self, character: char) -> Option<(f64, bool, bool)> {
         let mut cache = self.advances.lock().ok()?;
         if let Some(advance) = cache.get(&character) {
             return *advance;
@@ -119,6 +126,7 @@ impl NativeOtfMetrics {
                     (
                         f64::from(width) / f64::from(face.units_per_em()),
                         program.faux_bold,
+                        program.verified_hft_bold_tracking,
                     )
                 });
             }
@@ -145,8 +153,8 @@ struct LiteralSpaceMetric {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NativePuaFonts {
-    programs: BTreeMap<String, BTreeMap<(bool, bool), Arc<NativePuaMetrics>>>,
-    literal_spaces: BTreeMap<String, BTreeMap<(bool, bool), LiteralSpaceMetric>>,
+    programs: BTreeMap<String, BTreeMap<(bool, bool, Option<bool>), Arc<NativePuaMetrics>>>,
+    literal_spaces: BTreeMap<String, BTreeMap<(bool, bool, Option<bool>), LiteralSpaceMetric>>,
     otf_programs: BTreeMap<String, BTreeMap<(bool, bool), Arc<NativeOtfMetrics>>>,
 }
 
@@ -221,6 +229,14 @@ impl NativePuaFonts {
             digest,
             faux_bold: bold && !face.is_bold(),
             cff: is_cff_program(bytes, face_index),
+            verified_hft_bold_tracking: face.names().into_iter().any(|name| {
+                matches!(
+                    name.name_id,
+                    ttf_parser::name_id::FAMILY | ttf_parser::name_id::TYPOGRAPHIC_FAMILY
+                ) && name.to_string().is_some_and(|family| {
+                    matches!(family.trim(), "신명 중고딕" | "Sinmyeong Junggothic")
+                })
+            }),
         });
         self.otf_programs
             .entry(family.to_owned())
@@ -250,6 +266,31 @@ impl NativePuaFonts {
         bytes: &[u8],
         face_index: u32,
     ) -> Result<bool, &'static str> {
+        self.register_with_source(family, bold, italic, None, bytes, face_index)
+    }
+
+    /// 같은 family의 TTF와 HFT 슬롯은 서로 다른 실제 프로그램을 소유할 수 있다.
+    pub fn register_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
+        self.register_with_source(family, bold, italic, Some(source_ttf), bytes, face_index)
+    }
+
+    fn register_with_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: Option<bool>,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
         if family.is_empty() || family.len() > 4096 || family.chars().any(char::is_control) {
             return Err("invalid native PUA font family");
         }
@@ -267,7 +308,7 @@ impl NativePuaFonts {
             let removed = self
                 .programs
                 .get_mut(family)
-                .is_some_and(|programs| programs.remove(&(bold, italic)).is_some());
+                .is_some_and(|programs| programs.remove(&(bold, italic, source_ttf)).is_some());
             if self.programs.get(family).is_some_and(BTreeMap::is_empty) {
                 self.programs.remove(family);
             }
@@ -278,13 +319,14 @@ impl NativePuaFonts {
             face_index,
             advances,
         };
-        if self
-            .get(family, bold, italic)
-            .is_some_and(|old| *old == metric)
-        {
+        let existing = self
+            .programs
+            .get(family)
+            .and_then(|entries| entries.get(&(bold, italic, source_ttf)));
+        if existing.is_some_and(|old| **old == metric) {
             return Ok(false);
         }
-        if self.get(family, bold, italic).is_none()
+        if existing.is_none()
             && self.programs.values().map(BTreeMap::len).sum::<usize>() >= MAX_PROGRAMS
         {
             return Err("native PUA font program limit exceeded");
@@ -292,7 +334,7 @@ impl NativePuaFonts {
         self.programs
             .entry(family.to_owned())
             .or_default()
-            .insert((bold, italic), Arc::new(metric));
+            .insert((bold, italic, source_ttf), Arc::new(metric));
         Ok(true)
     }
 
@@ -302,6 +344,37 @@ impl NativePuaFonts {
         family: &str,
         bold: bool,
         italic: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
+        self.register_literal_space_with_source(family, bold, italic, None, bytes, face_index)
+    }
+
+    pub fn register_literal_space_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
+        self.register_literal_space_with_source(
+            family,
+            bold,
+            italic,
+            Some(source_ttf),
+            bytes,
+            face_index,
+        )
+    }
+
+    fn register_literal_space_with_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: Option<bool>,
         bytes: &[u8],
         face_index: u32,
     ) -> Result<bool, &'static str> {
@@ -324,7 +397,7 @@ impl NativePuaFonts {
             let removed = self
                 .literal_spaces
                 .get_mut(family)
-                .is_some_and(|entries| entries.remove(&(bold, italic)).is_some());
+                .is_some_and(|entries| entries.remove(&(bold, italic, source_ttf)).is_some());
             if self
                 .literal_spaces
                 .get(family)
@@ -342,7 +415,7 @@ impl NativePuaFonts {
         let existing = self
             .literal_spaces
             .get(family)
-            .and_then(|entries| entries.get(&(bold, italic)));
+            .and_then(|entries| entries.get(&(bold, italic, source_ttf)));
         if existing == Some(&metric) {
             return Ok(false);
         }
@@ -359,7 +432,7 @@ impl NativePuaFonts {
         self.literal_spaces
             .entry(family.to_owned())
             .or_default()
-            .insert((bold, italic), metric);
+            .insert((bold, italic, source_ttf), metric);
         Ok(true)
     }
 
@@ -367,12 +440,118 @@ impl NativePuaFonts {
         Some(
             self.literal_spaces
                 .get(family)?
-                .get(&(bold, italic))?
+                .get(&(bold, italic, None))?
                 .advance_em,
         )
     }
 
+    pub fn literal_space_em_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> Option<f64> {
+        Some(
+            self.literal_spaces
+                .get(family)?
+                .get(&(bold, italic, Some(source_ttf)))
+                .or_else(|| self.literal_spaces.get(family)?.get(&(bold, italic, None)))?
+                .advance_em,
+        )
+    }
+
+    pub fn has_literal_space_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> bool {
+        self.literal_spaces
+            .get(family)
+            .is_some_and(|programs| programs.contains_key(&(bold, italic, Some(source_ttf))))
+    }
+
     pub fn get(&self, family: &str, bold: bool, italic: bool) -> Option<Arc<NativePuaMetrics>> {
-        self.programs.get(family)?.get(&(bold, italic)).cloned()
+        self.programs
+            .get(family)?
+            .get(&(bold, italic, None))
+            .cloned()
+    }
+
+    pub fn get_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> Option<Arc<NativePuaMetrics>> {
+        self.programs
+            .get(family)?
+            .get(&(bold, italic, Some(source_ttf)))
+            .or_else(|| self.programs.get(family)?.get(&(bold, italic, None)))
+            .cloned()
+    }
+
+    pub fn has_program_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> bool {
+        self.programs
+            .get(family)
+            .is_some_and(|programs| programs.contains_key(&(bold, italic, Some(source_ttf))))
+    }
+}
+
+#[cfg(test)]
+mod source_type_tests {
+    use super::NativePuaFonts;
+
+    // 저장소에 포함된 테스트 글꼴만 공급해 시스템 글꼴 설치에 의존하지 않는다.
+    const REGULAR: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPEquationLatinOnly.ttf");
+    const LIGHT: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPEquationCJKLight.ttf");
+    const NO_DIGIT: &[u8] = include_bytes!("../../tests/fixtures/fonts/RHWPHftOutline.otf");
+
+    #[test]
+    fn literal_space_programs_are_owned_by_source_type() {
+        let mut fonts = NativePuaFonts::default();
+        fonts
+            .register_literal_space("Mixed", false, false, REGULAR, 0)
+            .unwrap();
+        fonts
+            .register_literal_space_for_source("Mixed", false, false, false, LIGHT, 0)
+            .unwrap();
+        fonts
+            .register_literal_space_for_source("Mixed", false, false, true, REGULAR, 0)
+            .unwrap();
+        assert_eq!(
+            fonts.literal_space_em_for_source("Mixed", false, false, false),
+            Some(0.528)
+        );
+        assert_eq!(
+            fonts.literal_space_em_for_source("Mixed", false, false, true),
+            Some(0.555)
+        );
+        assert!(fonts.has_literal_space_for_source("Mixed", false, false, true));
+
+        fonts
+            .register_literal_space_for_source("Mixed", false, false, true, NO_DIGIT, 0)
+            .unwrap();
+        assert!(
+            !fonts.has_literal_space_for_source("Mixed", false, false, true),
+            "공통 등록의 대체 가능 여부는 명시 유형 등록의 성공이 아니다"
+        );
+        assert_eq!(
+            fonts.literal_space_em_for_source("Mixed", false, false, true),
+            Some(0.555)
+        );
+        assert_eq!(
+            fonts.literal_space_em_for_source("Mixed", false, false, false),
+            Some(0.528)
+        );
     }
 }

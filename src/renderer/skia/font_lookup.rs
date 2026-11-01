@@ -169,8 +169,29 @@ pub(super) fn text_typeface_candidates(
     requested: &str,
     style: FontStyle,
 ) -> (Vec<String>, Vec<TypefaceCandidate>) {
+    text_typeface_candidates_for_source(
+        font_mgr,
+        system_families,
+        custom_typefaces,
+        bundled_typefaces,
+        requested,
+        style,
+        false,
+    )
+}
+
+/// 명시적 TTF 슬롯은 같은 family의 CFF보다 OS가 선택한 TTF를 먼저 쓴다.
+pub(super) fn text_typeface_candidates_for_source(
+    font_mgr: &FontMgr,
+    system_families: &SystemFontFamilies,
+    custom_typefaces: &TypefaceCatalog,
+    bundled_typefaces: &TypefaceCatalog,
+    requested: &str,
+    style: FontStyle,
+    source_ttf: bool,
+) -> (Vec<String>, Vec<TypefaceCandidate>) {
     let families = text_family_candidates_for_weight(requested, *style.weight() >= 600);
-    let chain = typeface_candidates_for_families(
+    let chain = typeface_candidates_for_families_for_source(
         font_mgr,
         system_families,
         custom_typefaces,
@@ -178,6 +199,7 @@ pub(super) fn text_typeface_candidates(
         &families,
         &declared_family_candidates(requested),
         style,
+        source_ttf,
     );
     (families, chain)
 }
@@ -191,6 +213,28 @@ pub(super) fn typeface_candidates_for_families(
     families: &[String],
     postscript_requests: &[String],
     style: FontStyle,
+) -> Vec<TypefaceCandidate> {
+    typeface_candidates_for_families_for_source(
+        font_mgr,
+        system_families,
+        custom_typefaces,
+        bundled_typefaces,
+        families,
+        postscript_requests,
+        style,
+        false,
+    )
+}
+
+fn typeface_candidates_for_families_for_source(
+    font_mgr: &FontMgr,
+    system_families: &SystemFontFamilies,
+    custom_typefaces: &TypefaceCatalog,
+    bundled_typefaces: &TypefaceCatalog,
+    families: &[String],
+    postscript_requests: &[String],
+    style: FontStyle,
+    source_ttf: bool,
 ) -> Vec<TypefaceCandidate> {
     let mut chain = Vec::new();
     let mut seen = HashSet::new();
@@ -216,6 +260,22 @@ pub(super) fn typeface_candidates_for_families(
         .then(|| match_system_family_style(font_mgr, system_families, family, style))
         .flatten()
         {
+            if source_ttf && has_system_family(system_families, family) {
+                // 기존 match_system_family_style은 HFT용 CFF 우선 결과를 반환한다.
+                // 명시 TTF에서는 먼저 OS 원래 선택을 확인하고, 그것이 CFF이면
+                // 같은 스타일의 설치 TTF를 찾는다. 없는 경우 기존 사다리를 유지한다.
+                let original = font_mgr.match_family_style(family, style);
+                let ttf = original
+                    .filter(|face| !is_placeholder_typeface(face) && typeface_is_truetype(face))
+                    .or_else(|| {
+                        matching_system_programs(font_mgr, family, style)
+                            .into_iter()
+                            .find(typeface_is_truetype)
+                    });
+                if let Some(ttf) = ttf {
+                    push(ttf, "system");
+                }
+            }
             // 같은 family와 스타일이라도 한글·영문 OTF와 TTF가 서로 다른
             // 글리프를 담을 수 있다. 원 family의 CFF를 먼저 찾고, 없는
             // 글리프는 같은 family의 다른 프로그램을 대체 family보다 앞에 둔다.
@@ -411,6 +471,18 @@ fn typeface_is_cff(typeface: &Typeface) -> bool {
     typeface.to_font_bytes().is_some_and(|(bytes, index)| {
         crate::renderer::native_pua_fonts::is_cff_program(&bytes, index)
     })
+}
+
+fn typeface_is_truetype(typeface: &Typeface) -> bool {
+    let has_glyf = |bytes: &[u8], index| {
+        ttf_parser::Face::parse(bytes, index).is_ok_and(|face| face.tables().glyf.is_some())
+    };
+    if let Some((data, index)) = typeface.to_existing_font_data() {
+        return has_glyf(data.as_bytes(), index);
+    }
+    typeface
+        .to_font_bytes()
+        .is_some_and(|(bytes, index)| has_glyf(&bytes, index))
 }
 
 fn matching_system_programs(font_mgr: &FontMgr, family: &str, style: FontStyle) -> Vec<Typeface> {

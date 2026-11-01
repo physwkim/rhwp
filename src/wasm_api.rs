@@ -931,6 +931,22 @@ impl HwpDocument {
             .map_err(JsValue::from)
     }
 
+    #[wasm_bindgen(js_name = registerNativePuaFontForSource)]
+    pub fn register_native_pua_font_for_source_wasm(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_native_pua_font_for_source(
+            family, bold, italic, source_ttf, bytes, face_index,
+        )
+        .map_err(JsValue::from)
+    }
+
     #[wasm_bindgen(js_name = registerLiteralFigureSpaceFont)]
     pub fn register_literal_figure_space_font_wasm(
         &mut self,
@@ -942,6 +958,22 @@ impl HwpDocument {
     ) -> Result<bool, JsValue> {
         self.register_literal_figure_space_font(family, bold, italic, bytes, face_index)
             .map_err(JsValue::from)
+    }
+
+    #[wasm_bindgen(js_name = registerLiteralFigureSpaceFontForSource)]
+    pub fn register_literal_figure_space_font_for_source_wasm(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_literal_figure_space_font_for_source(
+            family, bold, italic, source_ttf, bytes, face_index,
+        )
+        .map_err(JsValue::from)
     }
 
     #[wasm_bindgen(js_name = clearNativePuaFonts)]

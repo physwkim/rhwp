@@ -13,7 +13,8 @@ use crate::renderer::{boxed_pua_char_overlap_semantics, clamp_tab_leader_end_x, 
 use super::font_catalog::TypefaceCatalog;
 use super::font_lookup::{
     font_style_for_text, match_supplied_family, match_system_family_style,
-    select_typeface_for_character, text_typeface_candidates, SystemFontFamilies,
+    select_typeface_for_character, text_typeface_candidates, text_typeface_candidates_for_source,
+    SystemFontFamilies,
 };
 use super::renderer::colorref_to_skia;
 use super::synthetic_typeface::{draw_synthetic_bold_paths, unemboldened_typeface};
@@ -81,13 +82,14 @@ impl SkiaTextReplay<'_> {
                 //
                 // 모든 후보를 chain 으로 보존 — char 단위 fallback 에 사용.
                 // 후보와 glyph 선택은 opt-in font decision trace도 그대로 사용한다.
-                let (_, typeface_chain) = text_typeface_candidates(
+                let (_, typeface_chain) = text_typeface_candidates_for_source(
                     self.font_mgr,
                     self.system_families,
                     self.custom_typefaces,
                     self.bundled_typefaces,
                     &crate::renderer::native_font_family_for_style(style),
                     font_style,
+                    style.source_font_is_ttf,
                 );
                 let hft_outline_family = (self.hft_outline_enabled
                     && crate::renderer::hft_outline::supports_style(style))
@@ -133,13 +135,14 @@ impl SkiaTextReplay<'_> {
                     if let Some(family) =
                         crate::renderer::measured_glyph_supplier::family(style, sample)
                     {
-                        let (_, chain) = text_typeface_candidates(
+                        let (_, chain) = text_typeface_candidates_for_source(
                             self.font_mgr,
                             self.system_families,
                             self.custom_typefaces,
                             self.bundled_typefaces,
                             family,
                             font_style,
+                            style.source_font_is_ttf,
                         );
                         return fonts::for_text(
                             &chain,

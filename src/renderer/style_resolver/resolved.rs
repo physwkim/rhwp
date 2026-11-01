@@ -25,6 +25,10 @@ pub struct ResolvedCharStyle {
     pub font_families_hft_hangul: Vec<bool>,
     /// 대체 여부와 무관하게 보존하는 원본 프로그램 종류다.
     pub font_families_source_hft: Vec<bool>,
+    /// 유형 미상과 구별한 원본 언어 슬롯의 명시적 TTF 선언이다.
+    pub font_families_source_ttf: Vec<bool>,
+    /// 독립 Print로 굵기 전진 계약을 확인한 원본 HFT 프로그램이다.
+    pub font_families_verified_hft_bold_tracking: Vec<bool>,
     pub font_families_hft_print_frame: Vec<bool>,
     /// 세션이 명시적으로 선택한 프로그램의 자연 윤곽 폭을 보존한다.
     pub font_families_preserve_glyph_ink: Vec<bool>,
@@ -139,6 +143,8 @@ impl Default for ResolvedCharStyle {
             font_families_glyph_fallback_advance_explicit: Vec::new(),
             font_families_hft_hangul: Vec::new(),
             font_families_source_hft: Vec::new(),
+            font_families_source_ttf: Vec::new(),
+            font_families_verified_hft_bold_tracking: Vec::new(),
             font_families_hft_print_frame: Vec::new(),
             font_families_preserve_glyph_ink: Vec::new(),
             font_families_hft_fullwidth_dot: Vec::new(),
@@ -250,6 +256,36 @@ impl ResolvedCharStyle {
             0
         };
         self.font_families_source_hft
+            .get(slot)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// 표시용 대체 글꼴과 구분해 원본 언어 슬롯의 TTF 선언을 조회한다.
+    pub fn source_ttf_for_lang(&self, lang_index: usize) -> bool {
+        let slot = if lang_index < self.font_families.len()
+            && !self.font_families[lang_index].is_empty()
+        {
+            lang_index
+        } else {
+            0
+        };
+        self.font_families_source_ttf
+            .get(slot)
+            .copied()
+            .unwrap_or(false)
+            && !self.source_hft_for_lang(slot)
+    }
+
+    pub fn verified_hft_bold_tracking_for_lang(&self, lang_index: usize) -> bool {
+        let slot = if lang_index < self.font_families.len()
+            && !self.font_families[lang_index].is_empty()
+        {
+            lang_index
+        } else {
+            0
+        };
+        self.font_families_verified_hft_bold_tracking
             .get(slot)
             .copied()
             .unwrap_or(false)
@@ -581,10 +617,11 @@ impl ResolvedStyleSet {
             })
             .or_else(|| {
                 let style = self.char_styles.get(char_style_id as usize)?;
-                self.native_pua_fonts.literal_space_em(
+                self.native_pua_fonts.literal_space_em_for_source(
                     style.font_family_for_lang(lang_index),
                     style.bold,
                     style.italic,
+                    style.source_ttf_for_lang(lang_index),
                 )
             })
     }
@@ -608,7 +645,7 @@ impl ResolvedStyleSet {
     }
 }
 
-crate::storage::clone_fields!(ResolvedCharStyle, {text_paint, font_family, font_families, font_families_metric_trusted, font_families_glyph_fallback_advance_explicit, font_families_hft_hangul, font_families_source_hft, font_families_hft_print_frame, font_families_preserve_glyph_ink, font_families_hft_fullwidth_dot, ascii_punct_latin_slot, explicit_latin_slot, font_families_metric_face, font_families_original_glyph_metric_face, font_space_em, font_size, font_sizes, font_positions, bold, italic, text_color, underline, underline_color, strike_color, strikethrough, letter_spacing, letter_spacings, ratio, ratios, border_fill_id, outline_type, shadow_type, shadow_color, shadow_offset_x, shadow_offset_y, emboss, engrave, superscript, subscript, emphasis_dot, underline_shape, strike_shape, kerning, shade_color});
+crate::storage::clone_fields!(ResolvedCharStyle, {text_paint, font_family, font_families, font_families_metric_trusted, font_families_glyph_fallback_advance_explicit, font_families_hft_hangul, font_families_source_hft, font_families_source_ttf, font_families_verified_hft_bold_tracking, font_families_hft_print_frame, font_families_preserve_glyph_ink, font_families_hft_fullwidth_dot, ascii_punct_latin_slot, explicit_latin_slot, font_families_metric_face, font_families_original_glyph_metric_face, font_space_em, font_size, font_sizes, font_positions, bold, italic, text_color, underline, underline_color, strike_color, strikethrough, letter_spacing, letter_spacings, ratio, ratios, border_fill_id, outline_type, shadow_type, shadow_color, shadow_offset_x, shadow_offset_y, emboss, engrave, superscript, subscript, emphasis_dot, underline_shape, strike_shape, kerning, shade_color});
 
 crate::storage::clone_fields!(ResolvedParaStyle, {alignment, vertical_alignment, line_spacing, line_spacing_type, margin_left, margin_right, indent, spacing_before, spacing_after, head_type, para_level, numbering_id, border_fill_id, border_spacing, border_connect, border_ignore_margin, default_tab_width, tab_stops, auto_tab_left, auto_tab_right, condense_min_space, english_break_unit, korean_break_unit, widow_orphan, keep_with_next, keep_lines, page_break_before});
 

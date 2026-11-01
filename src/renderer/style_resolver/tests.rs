@@ -5,6 +5,38 @@ use crate::model::document::DocInfo;
 use crate::model::style::*;
 use crate::renderer::DEFAULT_DPI;
 
+#[test]
+fn hwp5_unassigned_face_bits_do_not_override_a_real_program() {
+    use crate::model::document::Document;
+    use crate::model::provenance::SourceFormat;
+
+    let mut document = Document::default();
+    document.doc_info.font_faces = vec![vec![Font {
+        name: "휴먼명조".into(),
+        alt_type: 1,
+        ..Font::default()
+    }]];
+    document.doc_info.char_shapes = vec![CharShape::default()];
+    document.provenance.format = SourceFormat::Hwp5;
+    let hwp = resolve_styles_for_document(&document, DEFAULT_DPI);
+    assert!(!hwp.char_styles[0].source_ttf_for_lang(0));
+
+    // rhwp의 HWPX → HWP 저장은 명시적 type을 속성에 보존하고 출처를 표시한다.
+    document.provenance.hwpx_lineage = true;
+    let converted = resolve_styles_for_document(&document, DEFAULT_DPI);
+    assert!(converted.char_styles[0].source_ttf_for_lang(0));
+
+    document.provenance.hwpx_lineage = false;
+    document.provenance.format = SourceFormat::Hwpx;
+    let hwpx = resolve_styles_for_document(&document, DEFAULT_DPI);
+    assert!(hwpx.char_styles[0].source_ttf_for_lang(0));
+
+    document.doc_info.font_faces[0][0].alt_type = 2;
+    let hft = resolve_styles_for_document(&document, DEFAULT_DPI);
+    assert!(hft.char_styles[0].source_hft_for_lang(0));
+    assert!(!hft.char_styles[0].source_ttf_for_lang(0));
+}
+
 fn make_doc_info_with_font() -> DocInfo {
     DocInfo {
         font_faces: vec![

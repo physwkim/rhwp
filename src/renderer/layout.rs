@@ -3726,6 +3726,7 @@ mod picture_border;
 mod picture_footnote;
 mod shape_layout;
 mod stored_shape_host;
+mod stored_tac_frame;
 mod table_cell_content;
 mod table_grid_width;
 mod table_host_flow;

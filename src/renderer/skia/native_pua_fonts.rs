@@ -1,7 +1,7 @@
 //! 이미 적재한 실제 문자 fallback을 원 PUA의 조판/paint 공급자로 준비한다.
 
 use super::super::font_lookup::{
-    font_style_for_text, select_typeface_for_character, text_typeface_candidates,
+    font_style_for_text, select_typeface_for_character, text_typeface_candidates_for_source,
 };
 use super::SkiaLayerRenderer;
 use crate::{document_core::DocumentCore, renderer::TextStyle, HwpError};
@@ -15,13 +15,14 @@ impl SkiaLayerRenderer {
                 italic: request.italic,
                 ..Default::default()
             });
-            let (_, candidates) = text_typeface_candidates(
+            let (_, candidates) = text_typeface_candidates_for_source(
                 &self.font_mgr,
                 &self.system_families,
                 &self.custom_typefaces,
                 &self.bundled_typefaces,
                 &request.family,
                 style,
+                request.source_ttf,
             );
             candidates
                 .into_iter()
@@ -69,13 +70,14 @@ impl SkiaLayerRenderer {
                 italic: request.italic,
                 ..Default::default()
             });
-            let (_, candidates) = text_typeface_candidates(
+            let (_, candidates) = text_typeface_candidates_for_source(
                 &self.font_mgr,
                 &self.system_families,
                 &self.custom_typefaces,
                 &self.bundled_typefaces,
                 &request.family,
                 style,
+                request.source_ttf,
             );
             let symbols: &[char] = if request.literal_figure_space {
                 &['\u{2007}', '0']

@@ -49,6 +49,31 @@ test('실제 적재한 face 순서로 PUA 공급을 판단하고 지원하지 �
 });
 test('구형 WASM에는 등록을 시도하지 않고 기존 표시 경로를 유지한다',async()=>{assert.deepEqual(await prepareNativePuaFonts({},[],()=>{throw Error('unexpected read')}),[])});
 
+test('같은 family의 원본 TTF와 HFT 요청은 각 유형에 맞는 프로그램을 따로 공급한다', async () => {
+  const oldDoc = globalThis.document, oldFont = globalThis.FontFace;
+  globalThis.document = {fonts: new Set()};
+  globalThis.FontFace = class { async load() { return this; } };
+  try {
+    const calls = [];
+    const owner = {
+      getNativePuaFontRequests: () => JSON.stringify([
+        {family: 'Mixed', bold: false, italic: false},
+        {family: 'Mixed', bold: false, italic: false, source_ttf: true},
+      ]),
+      registerNativePuaFont() { throw Error('유형별 등록을 사용해야 한다'); },
+      registerNativePuaFontForSource(_family, _bold, _italic, sourceTtf, bytes) {
+        calls.push([sourceTtf, bytes[0]]); return true;
+      },
+    };
+    const fonts = [
+      {families: ['Mixed'], weight: 400, style: 'normal', sha256: 'cff', openTypeCff: true, id: 79},
+      {families: ['Mixed'], weight: 400, style: 'normal', sha256: 'ttf', openTypeCff: false, id: 0},
+    ];
+    await prepareNativePuaFonts(owner, fonts, async font => Uint8Array.of(font.id, 1, 0, 0).buffer);
+    assert.deepEqual(calls, [[false, 79], [true, 0]]);
+  } finally { globalThis.document = oldDoc; globalThis.FontFace = oldFont; }
+});
+
 test('분할 CFF의 첫 face가 PUA를 공급하지 못하면 다음 face를 검사한다', async () => {
   const oldDoc = globalThis.document, oldFont = globalThis.FontFace;
   globalThis.document = {fonts: new Set()};

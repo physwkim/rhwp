@@ -332,7 +332,7 @@ async function main() {
           const metafileFaces = await selectSweepPaintFontFaces(
             doc, fonts, metafileRequests, effectRequests, loadRequestedFont);
           metafileRequests.push(...effectRequests);
-          const requested = new Set(), intrinsicRequested = new Set();
+          const requested = new Set(), intrinsicRequested = new Set(), ttfRequested = new Set();
           if (metafileRequests.length) {
             for (const request of metafileRequests) {
               for (const family of request.families) {
@@ -349,6 +349,11 @@ async function main() {
             // 첫 face에 없는 문자의 fallback도 같은 실제 family 사다리로 공급한다.
             for (const family of chain) {
               if (family.startsWith('__rhwp_intrinsic__')) intrinsicRequested.add(family.slice('__rhwp_intrinsic__'.length));
+              if (family.startsWith('__rhwp_ttf__')) {
+                const original = family.slice('__rhwp_ttf__'.length);
+                ttfRequested.add(original);
+                requested.add(original);
+              }
               if (fonts.some(record => record.families.some(name => name.toLowerCase() === family))) requested.add(family);
             }
           }
@@ -404,6 +409,25 @@ async function main() {
             catch (error) { throw Error(`선택한 Canvas 글꼴을 적재할 수 없습니다: ${family}, ${record.source}, ${error}`); }
             supplied.add(`${family.toLowerCase()}|${record.weight}|${record.style}|${record.sha256}`);
             loaded.push({family, registeredFamily: font.family, sourceSha256: record.sourceSha256, sha256: record.sha256, textProgramSha256, faceIndex: record.faceIndex, weight: record.weight, style: record.style, repairs: record.repairs, sourceKind: record.sourceKind || 'external'});
+          }
+          const ttfRegistered = new Set();
+          for (const record of fonts) for (const family of record.families) {
+            const key = `${family.toLowerCase()}|${record.weight}|${record.style}`;
+            if (!ttfRequested.has(family.toLowerCase()) || ttfRegistered.has(key) || record.openTypeCff) continue;
+            ttfRegistered.add(key);
+            let bytes = bytesCache.get(record.sha256);
+            if (!bytes) {
+              const response = await fetch(record.url);
+              if (!response.ok) throw Error(`원본 TTF를 읽을 수 없습니다: ${record.url}`);
+              bytes = await response.arrayBuffer(); bytesCache.set(record.sha256, bytes);
+            }
+            const alias = `__rhwp_ttf__${family}`;
+            const font = await installCanvasFont(alias, bytes,
+              {weight: String(record.weight), style: record.style}, doc,
+              false, false, null, false, false);
+            loaded.push({family, registeredFamily: font.family, sourceSha256: record.sourceSha256,
+              sha256: record.sha256, faceIndex: record.faceIndex, weight: record.weight,
+              style: record.style, repairs: record.repairs, sourceKind: record.sourceKind || 'external'});
           }
           await document.fonts.ready;
           // 캐시에 적재되기만 하고 아직 paint되지 않은 그림은 준비 뒤 다시 재생한다.

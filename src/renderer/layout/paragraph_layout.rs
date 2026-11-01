@@ -1320,6 +1320,8 @@ struct RunEmitVars<'a> {
     baseline: f64,
     /// 같은 줄의 그림·도형이 공유하는 줄 상자 기준선.
     object_baseline: f64,
+    /// 저장 줄 중심과 문자 기준선이 다른 인라인 표 줄이다.
+    centered_inline_table_baseline: bool,
     raw_lh: f64,
     alignment: crate::model::style::Alignment,
     auto_tab_right: bool,
@@ -6553,6 +6555,32 @@ impl LayoutEngine {
                 // 되돌리고, 정상 저장 baseline(bl < th)은 그대로 둔다.
                 (line_height, object_baseline)
             };
+            // 저장 기준선이 줄 상자의 중심인 인라인 표 줄은 개체 원점과
+            // 문자 기준선을 구분한다. 한컴 Print에서 표 옆 글자는 그 중심에
+            // 글자 상자를 맞추고, 글자 기준선은 상자 위에서 0.85em이다.
+            // 한컴이 다시 저장한 900·1200 HU 대조에서 표는 고정되고 문자만
+            // 크기에 비례해 움직이는 것을 확인했다.
+            let centered_inline_table_baseline = !runs_all_whitespace
+                && !has_tac_shape
+                && !source_metrics_reflowed
+                && max_fs > 0.0
+                && comp_line.line_height > 0
+                && comp_line.baseline_distance.saturating_mul(2) == comp_line.line_height
+                && para.is_some_and(|p| {
+                    !crate::renderer::composer::line_metrics_regenerated(p, line_idx)
+                        && p.line_segs.get(line_idx).is_some_and(|seg| {
+                            seg.line_height == comp_line.line_height
+                                && seg.baseline_distance == comp_line.baseline_distance
+                        })
+                        && line_tac_offsets_for_width.iter().any(|(_, _, ci)| {
+                            matches!(p.controls.get(*ci), Some(Control::Table(t)) if t.common.treat_as_char)
+                        })
+                });
+            let baseline = if centered_inline_table_baseline {
+                baseline + max_fs * (0.85 - 0.5)
+            } else {
+                baseline
+            };
             // 들여쓰기/내어쓰기: 문단 여백은 무조건 적용
             // - 보통(ind=0): 모든 줄 margin_left
             // - 들여쓰기(ind>0): 첫줄 margin_left+indent, 다음줄 margin_left
@@ -8031,6 +8059,7 @@ impl LayoutEngine {
                     space_compressions: compression.as_ref().map(|plan| plan.runs.as_slice()),
                     baseline,
                     object_baseline,
+                    centered_inline_table_baseline,
                     raw_lh,
                     alignment,
                     auto_tab_right,
@@ -8808,6 +8837,7 @@ impl LayoutEngine {
             space_compressions,
             baseline,
             object_baseline,
+            centered_inline_table_baseline,
             raw_lh,
             alignment,
             auto_tab_right,
@@ -8858,10 +8888,10 @@ impl LayoutEngine {
                     Some(Control::Table(table)) if table.common.treat_as_char => {
                         let h = hwpunit_to_px(table.common.height as i32, self.dpi);
                         let mt = hwpunit_to_px(table.outer_margin_top as i32, self.dpi);
-                        let mb = hwpunit_to_px(table.outer_margin_bottom as i32, self.dpi);
-                        ((mt > 0.0 || mb > 0.0)
-                            && (h + mt + mb - 0.2..=h + mt + mb + 0.2).contains(&raw_lh))
-                        .then_some((h, mt))
+                        super::stored_tac_frame::owned_body_height(
+                            table, h, raw_lh, styles, self.dpi, 0.2,
+                        )
+                        .map(|owned_height| (owned_height, mt))
                     }
                     _ => None,
                 })
@@ -10252,10 +10282,11 @@ impl LayoutEngine {
                                 // [#7150] 같은 줄에 여러 표가 있어도 저장 lh가 자기
                                 // 높이와 상하 여백의 합이면 자기 바깥여백에 앉힌다.
                                 // 동반 표는 위에서 한 번 선택한 줄별 앵커를 공유한다.
-                                let stored_lh_covers_om = (om_top > 0.0 || om_bottom > 0.0)
-                                    && (table_h + om_top + om_bottom - 0.2
-                                        ..=table_h + om_top + om_bottom + 0.2)
-                                        .contains(&raw_lh);
+                                let stored_lh_covers_om =
+                                    super::stored_tac_frame::owned_body_height(
+                                        t, table_h, raw_lh, styles, self.dpi, 0.2,
+                                    )
+                                    .is_some();
                                 let table_y = if stored_lh_covers_om {
                                     y + om_top
                                 } else if let Some((owner_h, owner_om_top)) = line_table_owner {
@@ -10284,7 +10315,12 @@ impl LayoutEngine {
                                     //   issue2083  121.80 → 35.20 → **16.9** (한/글 18.22)
                                     //   issue2470   41.60 → 19.40 → ** 4.9** (한/글  6.23)
                                     //   36384689    62.80 → 22.20 → ** 8.2** (한/글  9.43)
-                                    (text_y + baseline - table_h * 0.85).max(y)
+                                    let table_baseline = if centered_inline_table_baseline {
+                                        object_baseline
+                                    } else {
+                                        baseline
+                                    };
+                                    (text_y + table_baseline - table_h * 0.85).max(y)
                                 };
                                 // [Task #2212] 셀 안 인라인 TAC 표는 외곽 셀 경로를
                                 // 확장한 2단 cell_context 로 렌더해야 경로 기반 조회

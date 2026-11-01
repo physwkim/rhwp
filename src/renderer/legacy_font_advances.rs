@@ -14,6 +14,14 @@ pub(crate) const HANYANG_HFT_METRIC_FACE: &str = "한양신명조 (HFT)";
 // 실제 표시 family나 파일 이름이 아닌, HWP 꾸밈의 측정 계약 식별자다.
 const MALGUN_BOLD_DECORATION_METRIC_FACE: &str = "MalgunGothic-HancomBoldDecoration";
 
+/// 같은 원본 HFT 프로그램의 2020·2024 Print에서 확인된 굵기 전진이다.
+/// 실제 공급 프로그램의 소유 확인은 글리프 측정 단계에서 별도로 수행한다.
+pub(crate) fn has_verified_hft_bold_tracking_source(face: &crate::model::style::Font) -> bool {
+    !face.is_embedded
+        && face.alt_type == 2
+        && matches!(face.name.trim(), "신명 중고딕" | "Sinmyeong Junggothic")
+}
+
 pub(crate) fn select_native_programs(document: &Document, styles: &mut ResolvedStyleSet) {
     use crate::model::provenance::SourceFormat;
     let source_format = document.provenance.format;

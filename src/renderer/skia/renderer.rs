@@ -494,9 +494,10 @@ impl SkiaLayerRenderer {
         page_num: u32,
         options_json: &str,
     ) -> Result<String, crate::error::HwpError> {
-        let observe = |requested: &str, character: char, bold: bool, italic: bool| {
-            self.font_decision(requested, character, bold, italic)
-        };
+        let observe =
+            |requested: &str, character: char, bold: bool, italic: bool, source_ttf: bool| {
+                self.font_decision(requested, character, bold, italic, source_ttf)
+            };
         core.get_font_decision_trace_with_native_observer(
             page_num,
             options_json,
@@ -562,8 +563,11 @@ impl SkiaLayerRenderer {
         character: char,
         bold: bool,
         italic: bool,
+        source_ttf: bool,
     ) -> crate::renderer::font_decision::BackendDecision {
-        use super::font_lookup::{select_typeface_for_character, text_typeface_candidates};
+        use super::font_lookup::{
+            select_typeface_for_character, text_typeface_candidates_for_source,
+        };
 
         let style = font_style_for_text(&crate::renderer::TextStyle {
             font_family: requested.into(),
@@ -571,13 +575,14 @@ impl SkiaLayerRenderer {
             italic,
             ..Default::default()
         });
-        let (candidates, typefaces) = text_typeface_candidates(
+        let (candidates, typefaces) = text_typeface_candidates_for_source(
             &self.font_mgr,
             &self.system_families,
             &self.custom_typefaces,
             &self.bundled_typefaces,
             requested,
             style,
+            source_ttf,
         );
         let selected = select_typeface_for_character(&typefaces, character);
         let mut failures = Vec::new();

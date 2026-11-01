@@ -52,6 +52,17 @@ pub(crate) fn try_resolve_styles_for_document<S: storage::Storage>(
     let lookup = missing_fonts::try_lookup_context(document, storage)?;
     let mut styles = try_resolve_styles_with_variant(&lookup, dpi, profile.hwp3_layout(), storage)?;
     styles.source_hwp3_native = profile.hwp3_native_layout();
+    if document.provenance.format == crate::model::provenance::SourceFormat::Hwp5
+        && !document.provenance.hwpx_lineage
+    {
+        // HWP5 FACE_NAME의 속성 하위 비트는 공식 표 20에서 글꼴 유형으로
+        // 정의하지 않는다. HWPX의 명시 type과 달리 이 값만으로 실제 TTF를
+        // 확정해 같은 family의 HFT 공급 순서를 덮어쓰지 않는다. HWPX에서
+        // rhwp가 변환한 문서는 명시적 type을 이 비트에 저장하므로 보존한다.
+        for style in &mut styles.char_styles {
+            style.font_families_source_ttf.fill(false);
+        }
+    }
     if missing_fonts::missing_char_table(document) {
         styles.page_number_char_style_id = Some(0);
         styles.page_number_font_is_hft = false;
@@ -640,6 +651,8 @@ pub(crate) fn try_resolve_single_char_style<A: storage::Storage>(
     let mut font_families_glyph_fallback_advance_explicit = storage.vec(LANG_COUNT)?;
     let mut font_families_hft_hangul = storage.vec(LANG_COUNT)?;
     let mut font_families_source_hft = storage.vec(LANG_COUNT)?;
+    let mut font_families_source_ttf = storage.vec(LANG_COUNT)?;
+    let mut font_families_verified_hft_bold_tracking = storage.vec(LANG_COUNT)?;
     let mut font_families_hft_print_frame = storage.vec(LANG_COUNT)?;
     let mut font_families_hft_fullwidth_dot = storage.vec(LANG_COUNT)?;
     let mut font_families_metric_face: Vec<Option<String>> = storage.vec(LANG_COUNT)?;
@@ -658,6 +671,10 @@ pub(crate) fn try_resolve_single_char_style<A: storage::Storage>(
             .get(lang)
             .and_then(|faces| faces.get(font_id as usize));
         font_families_source_hft.push(source_font.is_some_and(|face| face.alt_type == 2));
+        font_families_source_ttf.push(source_font.is_some_and(|face| face.alt_type == 1));
+        font_families_verified_hft_bold_tracking.push(source_font.is_some_and(
+            crate::renderer::legacy_font_advances::has_verified_hft_bold_tracking_source,
+        ));
         let decision = try_lookup_font_name_decision(doc_info, lang, font_id, storage)?;
         let substituted = decision.substitution_boundary.is_some()
             && decision.normalized_face != decision.requested_face;
@@ -837,6 +854,8 @@ pub(crate) fn try_resolve_single_char_style<A: storage::Storage>(
         font_families_glyph_fallback_advance_explicit,
         font_families_hft_hangul,
         font_families_source_hft,
+        font_families_source_ttf,
+        font_families_verified_hft_bold_tracking,
         font_families_hft_print_frame,
         font_families_preserve_glyph_ink: vec![false; LANG_COUNT],
         font_families_hft_fullwidth_dot,

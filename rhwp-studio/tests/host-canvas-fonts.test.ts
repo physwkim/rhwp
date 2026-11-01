@@ -79,6 +79,10 @@ test('같은 family의 OTF와 TTF를 모두 준비하고 OTF를 먼저 표시한
     await f.session.prepare(records);
     const css = withHostCanvasFonts(f.session, () => scopedHostCanvasFont('20px "Mixed", serif'));
     assert.match(css!, /__rhwp_host_face_\d+_2.*__rhwp_host_face_\d+_1/);
+    const ttfCss = withHostCanvasFonts(f.session, () =>
+      scopedHostCanvasFont('20px "__rhwp_ttf__Mixed", "Mixed", serif'));
+    assert.match(ttfCss!, /__rhwp_host_face_\d+_1.*__rhwp_host_face_\d+_2/,
+      '원본 TTF는 같은 family의 TTF를 우선하고 없는 글자는 CFF로 대체한다');
     await setHostFontProvider({ ...f.provider, async getSnapshot() { return {revision: 'only-ttf', faces}; },
       async readFace() { return {bytes: data('RHWPHostFixture-Regular.ttf')}; } });
     await f.session.prepare(resolveRendererLocalFontCandidates('Mixed', {weight: 400, slant: 'normal'}));
