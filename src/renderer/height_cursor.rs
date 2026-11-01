@@ -578,6 +578,45 @@ impl HeightCursor {
             .map(para_has_overlay_shape)
             .unwrap_or(false);
         if prev_has_overlay_shape || self.prev_item_was_partial_table {
+            // 분할 자리차지 표의 이어지는 조각 뒤 첫 문단은 저장 첫 줄이 조각 점유 끝(앞 간격을
+            // 조각 안에서 소비한 자리)이다. 그 줄로 단의 사다리 기준을 세워, 빈 문단 뒤
+            // trailing 줄간격 bridge 가 다음 문단을 한 줄간격 더 내리지 않게 한다.
+            if self.prev_item_was_partial_table
+                && self.vpos_page_base.is_none()
+                && !self.session_edited
+            {
+                if let (Some(host), Some(para)) =
+                    (paragraphs.get(prev_pi), paragraphs.get(item_para))
+                {
+                    let spacing_before = styles
+                        .para_styles
+                        .get(para.para_shape_id as usize)
+                        .map_or(0.0, |style| style.spacing_before);
+                    if let (Some(first), Some(spacing)) = (
+                        para.line_segs.first().filter(|seg| {
+                            seg.tag & LineSeg::TAG_IMPLEMENTATION_PROPERTY == 0
+                                && !para.stored_text_partition_is_dirty()
+                                && !para.cell_format_vpos_dirty
+                        }),
+                        crate::renderer::float_placement::split_float_successor_spacing_before(
+                            host,
+                            para,
+                            self.col_area_y,
+                            spacing_before,
+                            y_offset,
+                        ),
+                    ) {
+                        let line_top = y_offset + spacing;
+                        self.vpos_lazy_base = Some(
+                            first.vertical_pos
+                                - crate::renderer::px_to_hwpunit(
+                                    line_top - self.col_area_y,
+                                    self.dpi,
+                                ),
+                        );
+                    }
+                }
+            }
             return y_offset;
         }
         let Some(prev_para) = paragraphs.get(prev_pi) else {
@@ -978,7 +1017,35 @@ impl HeightCursor {
                 )
             })()
             .unwrap_or(false);
-            if !follows_stored_zero_origin {
+            // 명시적 새 쪽의 절대 위치 Square 앵커는 중간 문단의 로컬 0이
+            // 아니다. 쪽 원점이 이미 0으로 인증됐으면 옆 차선의 앵커 줄 뒤
+            // 저장 줄도 그 축을 소비한다. 측정과 paint가 같은 판정을 쓴다.
+            let follows_page_square_origin = self.vpos_page_base == Some(0)
+                && matches!(prev_para.column_type,
+                    crate::model::paragraph::ColumnBreakType::Page
+                        | crate::model::paragraph::ColumnBreakType::Column)
+                && !synthetic_prev_seg
+                && !prev_para.stored_text_partition_is_dirty()
+                && !prev_para.cell_format_vpos_dirty
+                && prev_para.controls.iter().any(|control| {
+                    matches!(control, Control::Table(table)
+                        if !table.common.treat_as_char
+                            && table.common.text_wrap == TextWrap::Square
+                            && matches!(table.common.vert_rel_to, VertRelTo::Page | VertRelTo::Paper))
+                })
+                && paragraphs.get(item_para).is_some_and(|current| {
+                    current.column_type == crate::model::paragraph::ColumnBreakType::None
+                        && !current.stored_text_partition_is_dirty()
+                        && !current.cell_format_vpos_dirty
+                        && current.line_segs.first().is_some_and(|first| {
+                            first.tag & LineSeg::TAG_IMPLEMENTATION_PROPERTY == 0
+                                && first.line_height > 0
+                                && first.vertical_pos > 0
+                                && self.col_anchor_y + hwpunit_to_px(first.vertical_pos, self.dpi)
+                                    <= self.col_area_y + self.col_area_height
+                        })
+                });
+            if !follows_stored_zero_origin && !follows_page_square_origin {
                 return y_offset;
             }
         }
@@ -1021,6 +1088,27 @@ impl HeightCursor {
             self.vpos_lazy_base = None;
             self.stored_column_origin = None;
             return y_offset;
+        }
+        // 합성 줄 뒤의 수용 위치가 원본 첫 줄과 이미 일치하면, 재구성 vpos를
+        // 옛 단 축으로 읽어 되당기지 않는다. 측정과 배치는 같은 기준을 이어받는다.
+        if synthetic_prev_seg && !self.session_edited && !self.skip_spacing_before_prededuct {
+            if let Some(base) = paragraphs.get(item_para).and_then(|current| {
+                origin::source_aligned_rebuilt_base(
+                    prev_para,
+                    current,
+                    styles,
+                    self.stored_column_origin?,
+                    y_offset,
+                    self.dpi,
+                )
+            }) {
+                if self.vpos_page_base.is_some() {
+                    self.vpos_page_base = Some(base);
+                } else {
+                    self.vpos_lazy_base = Some(base);
+                }
+                return y_offset;
+            }
         }
         // 저장 줄이 없는 글자취급 그림의 합성 시작이 앞 저장 글줄 끝과 같으면
         // 그 합성 좌표에는 그림 문단의 위 간격이 아직 담겨 있지 않다.

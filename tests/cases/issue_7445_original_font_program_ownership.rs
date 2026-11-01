@@ -1,3 +1,14 @@
+//! 관계형·고정형: 원본 글꼴 프로그램과 기호의 소유 계약.
+//! 주석 갱신: 2026-10-30T12:45:07+09:00; 직전 파일 커밋: 2026-10-29T17:36:06+09:00 (55d447871d).
+//! 2026-10-24 측정 raw(96dpi, PDFium, 2px): Native / fresh WASM(no-opt).
+//! 일·생활균형 HWPX 4쪽 99.69% / 99.69%, 5쪽 99.98% / 99.98%; 전 6쪽 최저 98.95% / 98.94%.
+//! 자산관리 HWPX 56쪽 99.98% / 99.98%; 전 60쪽 최저 96.08% / 96.08%.
+//! 개인정보 HWPX 18·43쪽 각 100.00% / 100.00%; 전 66쪽 최저 96.57% / 96.57%.
+//! 근거: mydocs/pr/assets/issue7445/completed-20261009/final-20261024/README.md.
+//! sample11은 원본 글꼴 선언만 검사한다. 2026-10-19 raw(192dpi, pdftoppm, 2px):
+//! 전 151쪽 최저 Native 90.06% / fresh WASM 90.07%; 해당 검사에 고정된 대상 쪽은 없다.
+//! 근거: mydocs/pr/assets/issue7445/completed-20261009/regression-policy-20261015/sample11-current-20261019/README.md.
+//! 수치는 각 증거의 당시 측정이며 현재 head를 재측정한 결과가 아니다.
 //! 원본 글꼴 프로그램·기호 소유는 공개 글꼴 결정 API로 확인한다.
 //! 전쪽 Native/fresh WASM90%와 해당 쪽98%·직접 판독을 마친 실물 경계는
 //! 내용 관계와 독립±2CSSpx로 함께 보호한다. 근거: stage5 C75/C76 보고서.
@@ -53,7 +64,6 @@ fn advance(record: &Value) -> f64 {
         .as_f64()
         .unwrap()
 }
-
 #[test]
 fn gulim_missing_point_publishes_the_measured_supplier_to_paint() {
     // 프로그램 cmap·독립 PDF 공급자 계약이며 법원 서식의 미달 배치를 고정하지 않는다.
@@ -86,7 +96,6 @@ fn gulim_missing_point_publishes_the_measured_supplier_to_paint() {
     );
     assert_eq!(program.export_hwp_native().unwrap(), original);
 }
-
 #[test]
 fn measured_original_glyph_survives_legacy_type1_display_fallback() {
     let fallback = core_with_palatino_program();
@@ -149,7 +158,6 @@ fn measured_original_glyph_survives_legacy_type1_display_fallback() {
 fn core_with_palatino_program() -> DocumentCore {
     core("Palatino Linotype", "A/A·", None)
 }
-
 #[test]
 fn explicit_true_type_program_keeps_its_own_slash_advance() {
     let mut core = core("HCI Poppy", "A/A·", None);
@@ -172,7 +180,6 @@ fn explicit_true_type_program_keeps_its_own_slash_advance() {
         "선택 환경은 원본을 수정하지 않음"
     );
 }
-
 #[test]
 fn onepoint_uses_its_symbol_program_before_glyph_resolution() {
     let core = core("휴먼명조", "가․나", Some("한양신명조"));
@@ -186,7 +193,6 @@ fn onepoint_uses_its_symbol_program_before_glyph_resolution() {
         "독립 전각 프로그램 전진"
     );
 }
-
 #[test]
 fn explicit_onepoint_provider_uses_its_own_advance() {
     let mut core = core("휴먼명조", "가․나", None);
@@ -200,7 +206,6 @@ fn explicit_onepoint_provider_uses_its_own_advance() {
     );
     assert_ne!(dot["layoutMetric"]["widthSource"], "heuristicFullwidth");
 }
-
 #[test]
 fn hyphenation_point_selects_the_symbol_slot_before_glyph_fallback() {
     // 한컴2020 Print의 교차 슬롯 probe: 한글=한컴바탕, 영문=한컴돋움,
@@ -214,7 +219,6 @@ fn hyphenation_point_selects_the_symbol_slot_before_glyph_fallback() {
         assert_eq!(core.document().sections[0].paragraphs[0].text, text);
     }
 }
-
 #[test]
 fn worklife_symbol_point_preserves_source_and_independent_completed_page_position() {
     // C93 Native/fresh WASM 전6쪽90% 이상. 변경 경계인5쪽은 각각
@@ -326,7 +330,6 @@ fn worklife_symbol_point_preserves_source_and_independent_completed_page_positio
     assert!((baseline - 111.23843383789062).abs() <= 2.0);
     assert_eq!(core.document().sections[0].paragraphs[pi].text, text);
 }
-
 #[test]
 fn original_hci_plus_keeps_its_independent_type3_advance() {
     // 일·생활균형 독립 Print 4/5쪽 T10: ToUnicode002B,
@@ -341,7 +344,6 @@ fn original_hci_plus_keeps_its_independent_type3_advance() {
     assert_eq!(plus["layoutMetric"]["widthSource"], "measuredOriginalGlyph");
     assert_eq!(program.document().sections[0].paragraphs[0].text, "A+A");
 }
-
 #[test]
 fn regular_hci_comparison_signs_keep_the_independent_program_and_ttf_boundary() {
     // 별도 ASCII95 ×6크기 한컴2020 Print: 일반 HCI Poppy의 <=>도
@@ -365,7 +367,6 @@ fn regular_hci_comparison_signs_keep_the_independent_program_and_ttf_boundary() 
         );
     }
 }
-
 #[test]
 fn asset_caption_comparison_program_reaches_the_following_source_text() {
     fn collect<'a>(node: &'a Value, out: &mut Vec<&'a Value>) {
@@ -428,7 +429,6 @@ fn asset_caption_comparison_program_reaches_the_following_source_text() {
     }
     assert_eq!(found, 2, "같은 원문의 두 비교 기호만 검사");
 }
-
 #[test]
 fn worklife_repeated_plus_keeps_the_following_value_on_its_independent_origin() {
     // C94: 전6쪽 Native/fresh WASM90% 이상, devel 대비0.01%p 하락0.
@@ -543,7 +543,6 @@ fn worklife_repeated_plus_keeps_the_following_value_on_its_independent_origin() 
     assert!((op["placement"]["runToPage"]["f"].as_f64().unwrap() - 997.9493815104166).abs() <= 2.0);
     assert_eq!(core.document().sections[0].paragraphs[pi].text, text);
 }
-
 #[test]
 fn worklife_declared_hft_quote_keeps_the_following_year_in_canvas_print() {
     use rhwp::document_core::CanvasMetricReply;
@@ -569,8 +568,8 @@ fn worklife_declared_hft_quote_keeps_the_following_year_in_canvas_print() {
         backend: MetricBackend::Canvas2d,
     };
     let batch = core.collect_canvas_metric_requests(context).unwrap();
-    // The actual Studio fallback measured the source HFT quote as a full em.
-    // Feed that real observation through the public preparation/selection path.
+    // 실제 Studio 대체 글꼴은 원본 HFT 따옴표의 폭을 1em으로 측정했다.
+    // 이 관측을 공개 준비·선택 경로에 전달한다.
     let replies = batch
         .requests
         .iter()
@@ -636,9 +635,9 @@ fn worklife_declared_hft_quote_keeps_the_following_year_in_canvas_print() {
     assert_eq!(owners.len(), 1);
     assert!(owners[0]["text"].as_str().unwrap().starts_with("22"));
     let x = owners[0]["placement"]["runToPage"]["e"].as_f64().unwrap();
-    // C80: Native/fresh WASM all6 pages >=90%; p4=99.04483/99.03763%.
-    // Independent2020 Print p4 H2hdrM year origin82.3953476pt ->96CSSpx.
-    // T16 quote ToUnicode2019, Widths225, FontMatrix.001; no font hmtx inference.
+    // C80: Native/fresh WASM 전 6쪽이 90% 이상이며 4쪽은 99.04483/99.03763%다.
+    // 독립 2020 Print 4쪽 H2hdrM 연도 원점은 82.3953476pt이며 96 CSS px로 환산한다.
+    // T16 따옴표는 ToUnicode 2019, Widths 225, FontMatrix .001이며 hmtx를 추정하지 않는다.
     assert!(
         (x - 109.86046346028646).abs() <= 2.0,
         "year after HFT quote: {x}"
@@ -646,7 +645,6 @@ fn worklife_declared_hft_quote_keeps_the_following_year_in_canvas_print() {
     assert_eq!(core.document().sections[0].paragraphs[pi].text, text);
     assert_eq!(core.page_count(), 6);
 }
-
 #[test]
 fn declared_hft_quote_preserves_ttf_and_unmeasured_style_boundaries() {
     use rhwp::renderer::supplemental_metrics::{MetricBackend, MetricContext};
@@ -700,7 +698,6 @@ fn declared_hft_quote_preserves_ttf_and_unmeasured_style_boundaries() {
         "measuredOriginalGlyph"
     );
 }
-
 #[test]
 fn hft_human_bold_tracking_preserves_regular_ttf_spaces_and_native_program_ownership() {
     let mut program = core("휴먼명조", "가 •", None);
@@ -736,7 +733,6 @@ fn hft_human_bold_tracking_preserves_regular_ttf_spaces_and_native_program_owner
         "원 프로그램의 bold 추적을 중복하지 않음:{final_advance}"
     );
 }
-
 #[test]
 fn original_hci_bold_comparison_glyphs_preserve_style_and_ttf_boundaries() {
     let mut program = core("HCI Poppy", "A<=>A", None);
@@ -776,7 +772,6 @@ fn original_hci_bold_comparison_glyphs_preserve_style_and_ttf_boundaries() {
         );
     }
 }
-
 #[test]
 fn declared_hft_gothic_keeps_its_monospace_ascii_punctuation() {
     // 별도 빈 HWPX의 전체 ASCII 표본을 한컴2020 Print: 95자 모두500/1000em.
@@ -872,7 +867,6 @@ fn pii_declared_program_core() -> DocumentCore {
     assert_eq!(core.page_count(), 66, "전쪽 독립 Print와 동일한 쪽 소속");
     core
 }
-
 #[test]
 fn pii_declared_ttf_angles_keep_the_document_program_advance() {
     // 독립 PII18/F7·43/F4는 Palatino Type0/CIDFontType2, < >의 /W=500이다.
@@ -923,7 +917,6 @@ fn pii_declared_ttf_angles_keep_the_document_program_advance() {
         }
     }
 }
-
 #[test]
 fn pii_declared_ttf_closing_angles_keep_source_order_and_independent_ends() {
     use rhwp::{
@@ -971,7 +964,7 @@ fn pii_declared_ttf_closing_angles_keep_source_order_and_independent_ends() {
     }
     let core = pii_declared_program_core();
     // 전66쪽 Native/fresh WASM90% 및18/43쪽 양쪽100%·review/overlay 직접 판독 후 추가.
-    // PDF CTM .12pt *96/72: p18 x1222,size125,W500 →205.52CSSpx;
+    // PDF CTM .12pt × 96/72: 18쪽 x1222, size125, W500 → 205.52 CSS px;
     // p43 x1021,size117,W500 →172.72CSSpx. 평균 점수나 후보 좌표를 근거로 삼지 않는다.
     for (page, count, label, expected_end) in
         [(18, 1, " 규제 개요 ", 205.52), (43, 2, "신  설", 172.72)]

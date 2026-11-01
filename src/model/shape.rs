@@ -4,6 +4,8 @@ use super::paragraph::Paragraph;
 use super::style::{Fill, ShapeBorderLine};
 use super::*;
 
+pub(crate) mod shadow;
+
 /// `raw_ctrl_data` (CTRL_HEADER) 바이트 오프셋 상수.
 ///
 /// `parse_common_obj_attr` 및 `serialize_common_obj_attr` 과 일치해야 한다.
@@ -284,6 +286,34 @@ pub struct ShapeComponentAttr {
     /// 아핀 행렬 비대각 요소 (회전/전단 성분)
     pub render_b: f64,
     pub render_c: f64,
+    /// [#8225] 묶음 안 자식 도형의 CTRL_DATA 원본 (자식 SHAPE_COMPONENT 바로 아래 레코드, 라운드트립 보존용).
+    /// 한컴은 여기에 개체 설명 글 같은 ParameterSet 을 둔다. 맨 위 개체의 CTRL_DATA 는
+    /// `Paragraph.ctrl_data_records` 가 갖는다.
+    #[serde(skip)]
+    pub ctrl_data: Option<Vec<u8>>,
+}
+
+impl ShapeComponentAttr {
+    /// 원본 사각형 안에서 수행하는 로컬 반전. 저장 행렬과 편집 캐시가 공유한다.
+    /// 현재 크기로의 배율과 회전·이동은 이 변환 다음에 합성한다.
+    pub(crate) fn local_reflection_matrix(&self) -> [f64; 6] {
+        [
+            if self.horz_flip { -1.0 } else { 1.0 },
+            0.0,
+            if self.horz_flip {
+                self.original_width as f64
+            } else {
+                0.0
+            },
+            0.0,
+            if self.vert_flip { -1.0 } else { 1.0 },
+            if self.vert_flip {
+                self.original_height as f64
+            } else {
+                0.0
+            },
+        ]
+    }
 }
 
 impl Default for ShapeComponentAttr {
@@ -316,6 +346,7 @@ impl Default for ShapeComponentAttr {
             render_sy: 1.0,
             render_b: 0.0,
             render_c: 0.0,
+            ctrl_data: None,
         }
     }
 }
@@ -534,8 +565,30 @@ impl ShapeObject {
     /// (`shape_attr.current_height`)는 어긋날 수 있다 — 한글은 둘 중 큰 값을
     /// 조판 높이로 쓴다. 조판·측정·렌더가 각자 이 식을 다시 쓰면 같은 속성에
     /// 정의가 여러 벌 생기므로(#4333) 이 메서드가 유일한 정의다.
+    ///
+    /// [#8167] HWPX `<hp:curSz height="0">` 를 파서가 `orgSz` 로 채운 값
+    /// (`current_height_was_zero`)은 `renderingInfo` 배율을 적용하기 전 원본 크기라
+    /// 실제 표시 높이가 아니다. 이때는 저장 프레임만 쓴다 — 한/글은 `sz` 1284HU ·
+    /// `orgSz` 6768HU 인 글자처럼 글상자를 1284HU 줄에 놓는다(HWP5-nopassword hwpx 18쪽).
     pub fn flow_height_hu(&self) -> i32 {
-        (self.common().height as i32).max(self.shape_attr().current_height as i32)
+        let attr = self.shape_attr();
+        let current = if attr.current_height_was_zero {
+            0
+        } else {
+            attr.current_height as i32
+        };
+        (self.common().height as i32).max(current)
+    }
+
+    /// 도형이 줄 흐름에서 차지하는 가로 범위 (HWPUNIT). [`Self::flow_height_hu`] 와 같은 규칙.
+    pub fn flow_width_hu(&self) -> i32 {
+        let attr = self.shape_attr();
+        let current = if attr.current_width_was_zero {
+            0
+        } else {
+            attr.current_width as i32
+        };
+        (self.common().width as i32).max(current)
     }
 
     /// 개체 요소 속성 가변 참조 반환
@@ -771,9 +824,9 @@ pub struct CurveShape {
     pub common: CommonObjAttr,
     /// 그리기 공통 속성
     pub drawing: DrawingObjAttr,
-    /// 제어점 좌표 목록
+    /// 곡선이 통과하는 원본 점 체인 (베지어 제어점 배열이 아님)
     pub points: Vec<Point>,
-    /// 세그먼트 타입 목록 (0: line, 1: curve)
+    /// 인접한 점 사이의 구간 종류: points.len() - 1개 (0: line, 1: curve)
     pub segment_types: Vec<u8>,
 }
 

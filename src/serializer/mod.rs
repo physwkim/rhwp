@@ -4,6 +4,7 @@
 //! `parser` 모듈의 역방향으로 동작한다.
 
 pub mod body_text;
+pub(crate) mod budget_cursor;
 pub mod byte_writer;
 pub mod cfb_writer;
 pub(crate) mod char_shape;
@@ -19,6 +20,7 @@ pub mod mini_cfb;
 /// [#4100] 중첩 OLE CFB 의 스트림 교체 — 루트 CLSID 와 나머지 스트림을 보존한다.
 pub mod ole_container;
 pub mod record_writer;
+mod shape_rendering;
 
 pub use cfb_writer::{
     serialize_hwp, serialize_hwp_with_password, serialize_hwp_with_password_and_report,

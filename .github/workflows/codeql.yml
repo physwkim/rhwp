@@ -7,7 +7,20 @@ on:
       # samples는 PR preflight에서 신규 reference-only와 기존 자료 변경을
       # 구분해 CodeQL no-op/full 판정을 발행한다.
       - 'assets/**'
-      - '*.md'
+      # #8267: root instruction documents must reach the fast-pass preflight.
+      - 'CHANGELOG.md'
+      - 'CHANGELOG_EN.md'
+      - 'CONTRIBUTING.md'
+      - 'CONVENTIONS.md'
+      - 'GEMINI.md'
+      - 'QWEN.md'
+      - 'README.md'
+      - 'README_EN.md'
+      - 'ROADMAP.md'
+      - 'SECURITY.md'
+      - 'THIRD_PARTY.md'
+      - 'THIRD_PARTY_LICENSES.md'
+      - 'replit.md'
       - 'LICENSE'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/FUNDING.yml'
@@ -108,6 +121,10 @@ jobs:
 
             function isAllowedReviewPath(file) {
               const filename = file.filename;
+              if (filename === 'AGENTS.md' || filename === 'CLAUDE.md') {
+                return !file.previous_filename
+                  && (file.status === 'added' || file.status === 'modified');
+              }
               if (filename.startsWith('mydocs/') && !renderContractPaths.has(filename)) {
                 return true;
               }
@@ -210,7 +227,7 @@ jobs:
                     && latest.creator?.login === 'github-actions[bot]'
                     && fields.size === expectedFields.length
                     && expectedFields.every((field) => fields.has(field))
-                    && fields.get('v') === '7'
+                    && fields.get('v') === '8'
                     && fields.get('rfp') === '1'
                     && fields.get('b') === pr.base.sha
                     && target
@@ -825,13 +842,13 @@ jobs:
       # 포화·스톨) 및 task_m100_3289_report.md 거버넌스 절 참조.
       - name: Initialize CodeQL (non-Rust)
         if: ${{ matrix.language != 'rust' && contains(format(',{0},', env.SELECTED_LANGUAGES), format(',{0},', matrix.language)) }}
-        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4 (2026-10-06)
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1 (2026-10-21)
         with:
           languages: ${{ matrix.language }}
 
       - name: Initialize CodeQL (Rust)
         if: ${{ matrix.language == 'rust' && contains(format(',{0},', env.SELECTED_LANGUAGES), format(',{0},', matrix.language)) && github.event_name == 'pull_request' }}
-        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4 (2026-10-06)
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1 (2026-10-21)
         with:
           languages: rust
           build-mode: none
@@ -841,7 +858,7 @@ jobs:
       # #6877에서 제외한 내부 metric 3개만 생략한다. PR의 paths는 가져오지 않는다.
       - name: Initialize CodeQL (Rust post-merge)
         if: ${{ matrix.language == 'rust' && contains(format(',{0},', env.SELECTED_LANGUAGES), format(',{0},', matrix.language)) && github.event_name == 'push' && github.ref == 'refs/heads/devel' }}
-        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4 (2026-10-06)
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1 (2026-10-21)
         with:
           languages: rust
           build-mode: none
@@ -850,7 +867,7 @@ jobs:
       # main push, schedule, workflow_dispatch retain all paths and all queries.
       - name: Initialize CodeQL (Rust full scan)
         if: ${{ matrix.language == 'rust' && contains(format(',{0},', env.SELECTED_LANGUAGES), format(',{0},', matrix.language)) && github.event_name != 'pull_request' && !(github.event_name == 'push' && github.ref == 'refs/heads/devel') }}
-        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4 (2026-10-06)
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1 (2026-10-21)
         with:
           languages: rust
           build-mode: none
@@ -863,4 +880,4 @@ jobs:
       # 추출 파일·SARIF 지표가 같았고, none 모드가 더 짧아 Rust 자동 빌드 의존을 제거한다.
       - name: Perform CodeQL Analysis
         if: ${{ contains(format(',{0},', env.SELECTED_LANGUAGES), format(',{0},', matrix.language)) }}
-        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4 (2026-10-06)
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1 (2026-10-21)

@@ -68,6 +68,43 @@ class LegacyProfileHeaderTests(unittest.TestCase):
             self.assertIn('maxp-zone-count', record['repairs'])
 
 
+class WebFontProgrammeTests(unittest.TestCase):
+    def test_webfont_container_is_unpacked_without_changing_font_tables(self):
+        from fontTools.ttLib import TTFont
+        fixture = Path(__file__).parents[2] / 'tests/fixtures/fonts/RHWPExactKerningSmoke.ttf'
+        for flavor in ['woff', 'woff2']:
+            with self.subTest(flavor=flavor), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                sources = root / 'sources'
+                sources.mkdir()
+                source = sources / f'fixture.{flavor}'
+                with TTFont(fixture) as font:
+                    font.flavor = flavor
+                    font.save(source)
+                original = source.read_bytes()
+                adapter = SimpleNamespace(resolve_input_path=lambda root, path: Path(path),
+                    sha256_file=sweep.sha256_file, write_json_atomic=sweep.write_json_atomic)
+                catalogue = png.font_catalog(adapter, root, [sources], root)
+                face = json.loads(catalogue.read_text())['faces'][0]
+                with TTFont(source, lazy=True) as before, TTFont(face['path'], lazy=True) as after:
+                    self.assertIsNone(after.flavor, 'PUA 계측 API도 읽을 수 있는 SFNT를 공급해야 한다')
+                    self.assertEqual(set(after.reader.keys()), set(before.reader.keys()))
+                    for tag in before.reader.keys():
+                        expected, actual = before.reader[tag], after.reader[tag]
+                        if tag == 'head':
+                            expected = expected[:8] + expected[12:]
+                            actual = actual[:8] + actual[12:]
+                        self.assertEqual(actual, expected, tag)
+                self.assertEqual(source.read_bytes(), original)
+                self.assertEqual(face['sourceSha256'], sweep.sha256_file(source))
+                self.assertEqual(face['sha256'], sweep.sha256_file(Path(face['path'])))
+                self.assertIn(f'{flavor}-to-sfnt', face['repairs'])
+                first = catalogue.read_text()
+                with patch('fontTools.ttLib.TTFont', side_effect=AssertionError('검증한 원본을 다시 파싱함')):
+                    cached = png.font_catalog(adapter, root, [sources], root).read_text()
+                self.assertEqual(cached, first, '검증된 공급 프로그램은 캐시에서 그대로 재사용한다')
+
+
 class FontNameCatalogueTests(unittest.TestCase):
     def test_invalid_legacy_name_preserves_valid_face_and_records_provenance(self):
         from fontTools.ttLib.tables._n_a_m_e import NameRecord
@@ -199,7 +236,40 @@ class PngExportTests(unittest.TestCase):
         self.assertFalse(png.png_export_has_pages(self.base, False, [2]))
 
 
+class SystemFontDiscoveryTests(unittest.TestCase):
+    def test_linux_fontconfig_returns_existing_supported_files_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            first = Path(folder) / '가.otf'
+            second = Path(folder) / 'b.ttf'
+            ignored = Path(folder) / 'not-a-font.txt'
+            for path in (first, second, ignored):
+                path.write_bytes(b'fixture')
+            output = '\n'.join(map(str, [second, first, second, ignored, Path(folder) / 'missing.otf']))
+            with (patch.object(sweep.platform, 'system', return_value='Linux'),
+                  patch.object(sweep.subprocess, 'run', return_value=SimpleNamespace(stdout=output))):
+                self.assertEqual(sweep.linux_system_font_files(), sorted([first, second]))
+
+    def test_missing_fontconfig_and_other_platforms_have_no_automatic_files(self):
+        with (patch.object(sweep.platform, 'system', return_value='Linux'),
+              patch.object(sweep.subprocess, 'run', side_effect=FileNotFoundError)):
+            self.assertEqual(sweep.linux_system_font_files(), [])
+        with patch.object(sweep.platform, 'system', return_value='Windows'):
+            self.assertEqual(sweep.linux_system_font_files(), [])
+
+
 class RasterDispatchTests(unittest.TestCase):
+    def test_png_inventory_records_explicit_program_file_and_rejects_missing_source(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / 'font.ttf'
+            source.write_bytes(b'font program inventory')
+            args, proof = sweep.svg_font_export_options(root, 'full', [source], allow_files=True)
+            self.assertEqual(args[-2:], ['--font-path', str(source)])
+            self.assertEqual(proof['files'], [{'path': str(source),
+                              'sha256': hashlib.sha256(source.read_bytes()).hexdigest()}])
+            with self.assertRaises(SystemExit):
+                sweep.svg_font_export_options(root, 'full', [root / 'missing.ttf'], allow_files=True)
+
     def test_legacy_svg_dispatch_yields_captures(self):
         records = [(1, Path('page.svg'), Path('tree.json'), Path('pdf.png'))]
         with patch('scripts.visual_sweep_raster.rasterized_sources', return_value=iter(records)):
@@ -228,6 +298,45 @@ class RasterDispatchTests(unittest.TestCase):
 
 
 class EmbeddedFontCatalogueTests(unittest.TestCase):
+    def test_post_glyph_count_repair_preserves_rendering_tables(self):
+        from fontTools.ttLib import TTFont
+        from fontTools.ttLib.sfnt import SFNTWriter
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            original = Path(__file__).parents[2] / 'tests/fixtures/fonts/RHWPHostFixture-Regular.ttf'
+            source = root / 'broken.ttf'
+            with TTFont(original, lazy=True) as font, source.open('wb') as output:
+                tags = sorted(font.reader.keys())
+                writer = SFNTWriter(output, len(tags), font.sfntVersion)
+                for tag in tags:
+                    value = font.reader[tag]
+                    if tag == 'post':
+                        value = value[:32] + (font['maxp'].numGlyphs - 1).to_bytes(2, 'big') + value[34:]
+                    writer[tag] = value
+                writer.close()
+            adapter = SimpleNamespace(resolve_input_path=lambda base, path: Path(path),
+                sha256_file=lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+                write_json_atomic=lambda path, value: Path(path).write_text(json.dumps(value)))
+            records = json.loads(png.font_catalog(adapter, root, [source], root).read_text())['faces']
+            self.assertIn('post-format2-glyph-count', records[0]['repairs'])
+            with TTFont(source, lazy=True) as before, TTFont(records[0]['path'], lazy=True) as after:
+                self.assertEqual(int.from_bytes(after.reader['post'][32:34], 'big'), after['maxp'].numGlyphs)
+                for tag in ('glyf', 'hmtx', 'cmap'):
+                    self.assertEqual(before.reader[tag], after.reader[tag], tag)
+
+    def test_catalog_marks_cff_from_actual_program_for_cached_and_new_faces(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / 'fixture.otf'
+            shutil.copyfile(Path(__file__).parents[2] / 'tests/fixtures/fonts/RHWPHftOutline.otf', source)
+            adapter = SimpleNamespace(resolve_input_path=lambda base, path: Path(path),
+                sha256_file=lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+                write_json_atomic=lambda path, value: Path(path).write_text(json.dumps(value)))
+            for _ in range(2):
+                records = json.loads(png.font_catalog(adapter, root, [source], root).read_text())['faces']
+                self.assertTrue(records)
+                self.assertTrue(all(record['openTypeCff'] for record in records))
+
     def test_empty_vtt_source_is_removed_without_changing_render_tables(self):
         from fontTools.ttLib import TTCollection, TTFont
         from fontTools.ttLib.sfnt import SFNTWriter
@@ -283,6 +392,13 @@ class EmbeddedFontCatalogueTests(unittest.TestCase):
             catalogue = json.loads(png.font_catalog(adapter, root, [system], output).read_text())
             self.assertEqual(len(catalogue['faces']), 2, '등록된 원본 컬렉션의 두 face가 모두 필요하다')
             self.assertEqual({face['source'] for face in catalogue['faces']}, {str(source.resolve())})
+            # 실제 Native 선택 프로그램을 파일로 우선 지정해도 같은 두 face를 공급해야 한다.
+            direct = json.loads(png.font_catalog(adapter, root, [source], output).read_text())
+            self.assertEqual(len(direct['faces']), 2, '단일 파일 경로를 디렉터리처럼 처리해 누락하면 안 된다')
+            self.assertEqual({face['sourceSha256'] for face in direct['faces']},
+                             {hashlib.sha256(source.read_bytes()).hexdigest()})
+            repeated = json.loads(png.font_catalog(adapter, root, [source, system, source], output).read_text())
+            self.assertEqual(repeated, direct, '파일과 등록 디렉터리가 같은 프로그램을 중복 공급하지 않는다')
 
     def test_collection_cache_reuses_exact_programs_and_repairs_corruption(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -1,3 +1,6 @@
+import { executeFormButton, applyFormActionPlan } from './input-handler-form-action';
+import { assertFormActionsEnabled } from '../core/form-action-policy.ts';
+import type { FormActionPlan } from '../../../rhwp-shared/forms/action-runtime';
 import { CommandErrorBoundary, type CommandErrorV1 } from '../core/command-error';
 import { isBodyControl } from './picture-hit-policy';
 import { showToast } from '@/ui/toast';
@@ -321,6 +324,7 @@ function createOverlayLabel(x: number, y: number, text: string): HTMLDivElement 
 /** 클릭 커서 배치 + 키보드 입력을 처리한다 */
 export class InputHandler {
   private cursor: CursorState;
+  private formActionOnly = false;
   private caret: CaretRenderer;
   private fieldMarker: FieldMarkerRenderer;
   private selectionRenderer: SelectionRenderer;
@@ -535,6 +539,7 @@ export class InputHandler {
   private isComposing = false;
   private compositionAnchor: DocumentPosition | null = null;
   private compositionLength = 0; // 문서에 삽입된 조합 텍스트 길이
+  private compositionBodyLogical = false;
   /** [#7489] 수정 모드에서 이번 조합이 덮어쓴 글자. null 이면 첫 조합 글자에서 정한다. */
   private _compositionCovered: string | null = '';
   /** [#7489] 이번 조합이 덮기 직전 문단 조각. 조합 취소면 되살리고, 확정이면 기록에 넘긴다. */
@@ -691,13 +696,20 @@ export class InputHandler {
       requestAnimationFrame(() => this.updateCaret(true));
     });
 
-    // 전체 mutation render는 renderer 선택 때문에 비동기다. 쪽/단 나누기·본문 Enter 직후의 첫
-    // updateCaret은 아직 이전 VirtualScroll을 보므로, 새 쪽 배치가 준비된 이 시점에
-    // page-local rect와 DOM 위치를 다시 계산하고 한컴처럼 대상 쪽을 화면에 드러낸다.
+    // mutation 직후에는 VirtualScroll이 이전 쪽 배치일 수 있다. 완료 시점의 현재 선택을
+    // 다시 투영한다. 선택 삭제 undo도 포함하되, 캐럿 자동 스크롤 예약과는 분리한다.
     eventBus.on('document-layout-refreshed', () => {
-      if (!this.caretLayoutReveal.consume() || !this.active) return;
-      this.cursor.updateRect();
-      this.updateCaret();
+      const revealCaret = this.caretLayoutReveal.consume();
+      if (!this.active) return;
+      if (revealCaret) {
+        this.cursor.updateRect();
+        this.updateCaret();
+      } else {
+        // 비동기 시작 시의 선택을 보관하지 않는다. 그동안 변경·해제된 선택도 반영하며
+        // anchor/focus와 사용자가 스크롤한 위치는 바꾸지 않는다.
+        this.caret.updatePosition(this.viewportManager.getZoom());
+        this.updateSelection();
+      }
     });
 
     // HF 선택은 같은 정의를 쓰는 visible page마다 투영한다. ViewportManager가 scroll
@@ -2139,9 +2151,14 @@ export class InputHandler {
   applyPendingCharShapeToRange(anchor: DocumentPosition, count: number): void {
     const props = this.getPendingCharShape();
     if (!props) return;
-    const to = anchor.charOffset + count;
-    applyCharShapeModsToRange(this.wasm, anchor, anchor.charOffset, to, props);
-    this.advancePendingCharShapeAnchor(anchor, { ...anchor, charOffset: to });
+    const textAnchor = this.compositionBodyLogical ? {
+      ...anchor,
+      charOffset: this.wasm.logicalToTextOffset(anchor.sectionIndex, anchor.paragraphIndex, anchor.charOffset),
+    } : anchor;
+    // 서식 범위는 텍스트 자리지만 예약은 갱신 전후의 논리 캐럿을 따른다.
+    const previous = this.compositionBodyLogical ? this.cursor.getPosition() : anchor;
+    applyCharShapeModsToRange(this.wasm, textAnchor, textAnchor.charOffset, textAnchor.charOffset + count, props);
+    this.advancePendingCharShapeAnchor(previous, { ...anchor, charOffset: anchor.charOffset + count });
   }
 
   /**
@@ -3455,6 +3472,7 @@ export class InputHandler {
 
   /** textarea에 포커스를 설정한다 (iOS 호환) */
   private focusTextarea(): void {
+    if (document.querySelector('.modal-overlay')) return;
     this.textarea.focus();
   }
 
@@ -4522,6 +4540,7 @@ export class InputHandler {
     this.isComposing = false;
     this.compositionAnchor = null;
     this.compositionLength = 0;
+    this.compositionBodyLogical = false;
     this._compositionCovered = '';
     // [#7489] 기록되기 전 덮은 조합의 문단 조각은 해제만 한다. deactivate 는 문서를 바꾼 뒤 불리므로
     // (같은 코어를 다시 쓰는 새 문서 포함) 되살리면 옛 문단이 새 문서에 끼어든다.
@@ -4580,6 +4599,7 @@ export class InputHandler {
     this.isComposing = false;
     this.compositionAnchor = null;
     this.compositionLength = 0;
+    this.compositionBodyLogical = false;
     this._compositionCovered = '';
     // [#7489] 기록되기 전 덮은 조합의 문단 조각을 해제한다(deactivate 와 같다).
     if (this._compositionFragment !== null) this.wasm.discardDeleteFragment(this._compositionFragment);
@@ -4830,7 +4850,7 @@ export class InputHandler {
     // 뮤테이션 적용 여부는 호출부의 form-mode 게이트(IME 조합·본문 입력 경로)가 이미 결정하므로,
     // 이미 적용된 편집은 항상 기록한다.
     if (desc.kind === 'record') return true;
-    if (desc.kind === 'snapshot') return false;
+    if (desc.kind === 'snapshot') return desc.operationType === 'formAction' && this.formActionOnly;
 
     const command = desc.command as any;
     switch (command.type) {
@@ -6305,7 +6325,9 @@ export class InputHandler {
         break;
       }
       case 'PushButton': {
-        // 명령 단추: 웹 환경에서는 보안상 비활성 (클릭 무시)
+        void executeFormButton({ owner: this, wasm: this.wasm, eventBus: this.eventBus,
+          executePlan: plan => this.executeFormActionPlan(plan) }, formHit, pageIdx)
+          .catch(error => showToast({ message: String(error) }));
         break;
       }
       case 'ComboBox': {
@@ -6316,6 +6338,30 @@ export class InputHandler {
         this.showEditOverlay(sec, para, ci, formHit, pageIdx);
         break;
       }
+    }
+  }
+
+  executeFormActionPlan(plan: FormActionPlan): void {
+    assertFormActionsEnabled();
+    const formOnly = plan.commands.every(command => command.name === 'Print' || command.name === 'FileSave');
+    if (this.editMode === 'form' && !formOnly) throw new Error('FORM_ACTION_PROTECTED: 양식 모드에서는 양식 값만 변경할 수 있습니다.');
+    for (const command of plan.commands) {
+      const id = command.name === 'Print' ? 'file:print' : command.name === 'FileSave' ? 'file:save' : null;
+      if (id && !this.dispatcher?.isEnabled(id)) throw new Error('FORM_ACTION_HOST_UNAVAILABLE');
+    }
+    if (plan.updates.length || plan.commands.some(command => command.name !== 'Print' && command.name !== 'FileSave')) {
+      let applied = false;
+      this.formActionOnly = formOnly;
+      try {
+        this.executeOperation({ kind: 'snapshot', operationType: 'formAction', selectionBefore: null,
+          operation: wasm => { const result = applyFormActionPlan(wasm, plan, this.cursor.getPosition()); applied = true; return result; },
+        });
+      } finally { this.formActionOnly = false; }
+      if (!applied) throw new Error('FORM_ACTION_REJECTED');
+    }
+    for (const command of plan.commands) {
+      if (command.name === 'Print') this.dispatcher?.dispatch('file:print');
+      else if (command.name === 'FileSave') this.dispatcher?.dispatch('file:save');
     }
   }
 
