@@ -9941,6 +9941,21 @@ impl LayoutEngine {
                         spacing_before,
                         y_offset - col_area.y,
                     );
+                let stored_frame_shared_spacing = if stored_frame_shared_spacing > 0.0 {
+                    stored_frame_shared_spacing
+                } else {
+                    crate::renderer::float_placement::stored_visible_host_successor_spacing(
+                        &col_content.items[..item_ordinal],
+                        paragraphs,
+                        item_para,
+                        spacing_before,
+                        (self.profile.get().hwpx_stored_layout()
+                            || self.profile.get().hwp5_stored_pagination_layout())
+                            && !self.profile.get().session_edited(),
+                        y_offset - col_area.y,
+                        self.dpi,
+                    )
+                };
                 // [#8149] 인증 배치가 없는 빈 host 자리차지 표 상자 뒤도 조판과 같은 소비를 한다.
                 // 소비량은 상자 바닥(스냅 전 흐름 끝)에서 잰다. 저장 줄 스냅이 이미 같은 앞 간격을
                 // 되돌렸으면 다시 빼지 않는다.

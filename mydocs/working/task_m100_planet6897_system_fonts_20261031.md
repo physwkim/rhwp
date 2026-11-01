@@ -1879,3 +1879,30 @@ WASM 측정과 Print 증거를 연결했다. 검사 함수나 제품 코드는 �
 
 재컴파일 후 #8153 HWP·HWPX 집중 검사 2건은 모두 통과했다. 로그는
 `output/pr-review/planet6897-ordered-20261031/jpeg-clean-cache-focused.log`다.
+
+### 2026-11-01 #8079 대조 문서 46쪽 후속 원점
+
+독립 한컴 2024 Print 46쪽과 동일한 HWPX의 Native overlay에서 첫 표와 본문을
+대조했다. 글이 있는 호스트 문단의 저장 줄 13920 HU, 개체 오프셋 2334 HU,
+위·아래 바깥 여백 각 140 HU와 표 높이 28437 HU가 닫는 끝은 후속 문단의
+저장 첫 줄 44971 HU와 같다. 실제 조판 커서도 그 위치에 도달했지만 후속 문단의
+앞 간격 500 HU를 다시 더한다. 이후 본문과 다음 표가 함께 내려간다.
+
+측정의 `typeset/paragraph/flow.rs`와 paint의 `layout.rs`가 같은 저장 줄·개체
+종료 관계를 조회해 앞 간격의 소유를 정한다. 호스트 문장·표 항목은 기존대로
+유지하며, 편집되거나 저장 끝이 닫히지 않는 경우 및 여러 개체의 소유가 모호한 경우는
+기존 흐름을 유지한다. 보정 전후 26·28·46쪽과 저장 경계가 다른 대조군을 직접
+비교하고 전쪽 Native/fresh WASM 및 회귀 검사는 이후에 수행한다.
+
+첫 후보는 후속 글은 제자리로 옮겼지만 46쪽 raw가 76.446%로 남았다. 실행 추적에서
+측정은 저장 표 끝에서 앞 간격을 돌려준 뒤 표 배제 처리로 다시 표 끝까지 전진했고,
+최종 글자처럼 표의 측정 커서는 저장 689.213px보다 앞 간격만큼 컸다. 따라서 배제
+처리 이후에도 동일한 저장 원점 계약을 다시 소비하도록 연결한다. 중간 후보의 출력은
+`output/pr-review/planet6897-ordered-20261031/k113-visible-host-review/`에 보존한다.
+
+배제 처리 뒤 같은 경계를 소비한 Native 후보의 46쪽 raw는 75.14032%에서
+99.74005%로 개선됐다. 7·8·26·28쪽은 각각 99.70643%·98.16573%·99.84160%·
+95.06099%이며, 46쪽에서는 호스트 글·두 표·후속 문단의 표시와 순서를 확인했다.
+[46쪽 review](../../output/pr-review/planet6897-ordered-20261031/k113-shared-origin-review/k113-shared-origin/review/review_046.png),
+[overlay](../../output/pr-review/planet6897-ordered-20261031/k113-shared-origin-review/k113-shared-origin/overlay/overlay_046.png).
+이 결과는 선택 쪽 Native이며 전쪽·fresh WASM과 회귀 검증은 이후에 수행한다.
