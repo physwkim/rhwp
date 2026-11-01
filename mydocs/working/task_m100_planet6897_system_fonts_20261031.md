@@ -1701,3 +1701,17 @@ WASM이 아니므로 최종 양쪽 98% 및 확대 판독 조건을 통과한 것
 동일하지만 PNG는 다르다(`fresh-base-handbook-p145-comparison.log`). 세 비교는
 시스템 전체 글꼴 환경의 재빌드 기준 대비 결과이며 제출 당시 TSV와 현재 후보의
 직접 무하락 조건을 대체하지 않는다.
+
+재빌드 기준 `545abe7699e2aa8f527d6868e390b1dff76bade449823e05773c0443d10204e3`과
+현재 코드 후보를 같은 시스템 글꼴·같은 한컴 PDF로 비교한 결과, sample16 2022
+전64쪽 중 7·10·31·37·53쪽의 미세 하락이 재현됐다
+(`fresh-base-sample16-2022-comparison.tsv`). 이전 실행 파일을 사용해 확인한
+기호 영역과 같은 범위다. 2024 HWP·HWPX 기준 재측정은 계속 진행한다.
+
+`6be28314c5` 이후 WASM 관련 소스에 변경이 없음을 확인하고, 현재 head의
+fresh WASM을 고정 `target/pr-review`, 빌드 잡 8개로 시작했다
+(`source-bold-boundary-fresh-wasm-provenance.log`,
+`source-bold-boundary-fresh-wasm-build.log`). 종료 코드·패키지 해시·Native와
+같은 원본의 전쪽 WASM 결과를 확인하기 전에는 이를 통과로 기록하지 않는다.
+#8079·#7092 회귀에 쓰인 나머지 입력의 현재 Native 전쪽도
+`regression-8079-7092-native-current.log`에서 묶어 검증 중이다.
