@@ -1577,3 +1577,11 @@ HFT로 선언돼 있지만 실제 선택은 `Malgun Gothic` 대체다. 설치된
 (`source-bold-boundary-sample16-2024-comparison.tsv`). 이 결과는 동일 환경의
 Native 대조이며, 제출 당시 TSV 수치와 fresh WASM의 별도 무하락 검증을
 대신하지 않는다. 중첩 표 9쪽의 새 후보 PNG SHA는 직전 후보와 같다.
+
+같은 새 후보의 sample16 2024 HWPX도 독립 PDF의 쪽별 래스터 SHA를
+원 PR 실행의 PDF와 대조하고 64쪽 전부 같은 시스템 글꼴로 비교했다.
+하락하거나 상승한 쪽은 없고 후보 최저는 51쪽 `99.904424355860%`다
+(`source-bold-boundary-sample16-hwpx-comparison.tsv`). 이는 동일 환경의
+Native 출력에 대한 결과이며 제출 당시 TSV 및 fresh WASM의 별도 대조를
+대신하지 않는다. 세 문서 추가 Native 실행은 모두 종료 코드 0이다
+(`source-bold-boundary-additional-full.log`).
