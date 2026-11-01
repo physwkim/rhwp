@@ -2102,13 +2102,16 @@ fn char_width_decision_with_hft_tracking<'a>(
         } else {
             c
         };
-        // [#8079] TrueType 로 선언된 face 의 굵은 글자는 보통 면 전진폭으로 잰다.
-        let regular_bold_advance =
-            !latin.map_or(style.source_font_is_hft, |l| l.source_font_is_hft);
         let original_glyph_face = latin
             .map_or(style.original_glyph_metric_family.as_deref(), |slot| {
                 slot.original_glyph_metric_family.as_deref()
             });
+        // [#8079] 표시용 TTF의 보통 폭은 원본 프로그램의 굵은 폭이 아니다.
+        // 원본 글리프 소유가 남아 있고 유형이 미확정이면 종전 굵은 폭을 유지한다.
+        // 실제 TTF가 명시된 슬롯과 원본 프로그램 소유가 없는 슬롯은 기존 계약을 쓴다.
+        let source_hft = latin.map_or(style.source_font_is_hft, |slot| slot.source_font_is_hft);
+        let source_ttf = latin.map_or(style.source_font_is_ttf, |slot| slot.source_font_is_ttf);
+        let regular_bold_advance = !source_hft && (source_ttf || original_glyph_face.is_none());
         let implicit_symbol_em = font_metrics_data::implicit_symbol_advance_em(chars[i]);
         let original_glyph_em = implicit_symbol_em.or_else(|| {
             original_glyph_face.and_then(|face| {

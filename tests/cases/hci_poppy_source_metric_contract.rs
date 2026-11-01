@@ -1,5 +1,5 @@
 //! 관계형·고정형: 합성 문자열의 원본 글꼴 전진폭 비율과 독립 폭 관측을 검사한다.
-//! 주석 갱신: 2026-10-31T23:52:21+09:00; 직전 파일 커밋: 2026-10-31T23:19:07+09:00 (9b59df521c9c427dfb9e8ea352d2337213cc3bb3).
+//! 주석 갱신: 2026-11-01T11:28:30+09:00; 직전 파일 커밋: 2026-10-31T23:53:29+09:00 (af175315e7e16800e65e573c2a2ac23e8d9da82b).
 //! 합성 문자 경계와 원본 프로그램 단위의 폭을 비교하며 실물 쪽의 시각 일치율을 판정하지 않는다.
 //! 근거: mydocs/pr/assets/issue_8160/poppy-original-widths.json, mydocs/pr/assets/issue_8160/poppy-ascii-neutral-advances.tsv.
 //! 원본 HFT 전진폭과 표시용 대체 face를 구분하는 합성 계약이다.
@@ -14,6 +14,45 @@ use rhwp::model::{
 };
 use rhwp::renderer::render_tree::{RenderNode, RenderNodeType, TextRunNode};
 use rhwp::DocumentCore;
+
+#[test]
+fn unresolved_original_bold_program_keeps_its_advance_with_a_display_fallback() {
+    use rhwp::renderer::layout::{EmbeddedTextMeasurer, TextMeasurer};
+    use rhwp::renderer::TextStyle;
+
+    // 원본 HCI Poppy 굵은 I/D/C의 독립 프로그램 폭은 각각 199/426/370 ÷ 512em이다.
+    // 표시 대체만 Palatino인 유형 미확정 원본에 보통 TTF 폭을 적용하지 않는다.
+    let source = TextStyle {
+        font_family: "Palatino Linotype".into(),
+        font_size: 26.666666666666668,
+        bold: true,
+        original_glyph_metric_family: Some("HCI Poppy".to_string().into()),
+        ..Default::default()
+    };
+    let measure = |style: &TextStyle| EmbeddedTextMeasurer.compute_char_positions("IDC", style);
+    let positions = measure(&source);
+    for (index, expected) in [199.0 / 512.0, 426.0 / 512.0, 370.0 / 512.0]
+        .into_iter()
+        .enumerate()
+    {
+        let em = (positions[index + 1] - positions[index]) / source.font_size;
+        assert!(
+            (em - expected).abs() < 0.002,
+            "원본 굵은 전진 {index}: 실제={em}, 독립 원본={expected}"
+        );
+    }
+
+    // 명시 TTF는 기존 #8079 계약을 유지한다. 글꼴 설치에 의존하지 않는다.
+    let explicit = TextStyle {
+        source_font_is_ttf: true,
+        ..source.clone()
+    };
+    let regular = TextStyle {
+        bold: false,
+        ..explicit.clone()
+    };
+    assert_eq!(measure(&explicit), measure(&regular));
+}
 
 fn find<'a>(node: &'a RenderNode, text: &str) -> Option<&'a TextRunNode> {
     if let RenderNodeType::TextRun(run) = &node.node_type {
