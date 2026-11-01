@@ -38,6 +38,8 @@
 
 현재 코드에서 `issue_8079_bold_regular_advance` 4건을 최소 글꼴 환경으로 다시 실행해 모두 통과했다([집중 검사 로그](../../../output/pr-review/planet6897-ordered-20261031/font-slot-focused-minfont-after-commit.log)). 같은 실행은 #8136·#8315를 포함한 10건이며, #8161의 나머지 시각·회귀 검증 전체를 대신하지 않는다.
 
+메인터너 보정 `6be28314c5`는 실제 원본 프로그램의 글리프 소유가 남아 있지만 글꼴 유형이 미확정인 경우, 표시 대체 글꼴의 보통 전진폭을 원본의 굵은 전진폭으로 잘못 사용하지 않도록 공통 측정 경계를 수정한다. 명시 TTF와 원본 프로그램 소유가 없는 경우의 기존 #8079 계약은 유지한다. 원본 HCI Poppy의 독립 프로그램 폭과 명시 TTF 반례를 포함한 최소 글꼴 집중 회귀 32건은 통과했다([로그](../../../output/pr-review/planet6897-ordered-20261031/source-bold-boundary-focused-minfont.log)). 이 결과는 전체 회귀 또는 Native·fresh WASM 전쪽 시각 검증을 대신하지 않는다.
+
 검토 후보에 포함된 입력 바이트를 Git blob과 대조했다. 아래 자료는 원 PR의 제출 증거이며 새 후보의 실행 결과를 뜻하지 않는다.
 - [`2026_oss_rst.hwp`](../../../samples/2026_oss_rst.hwp) — SHA-256 `b3a43578fc441d9668d06cd55c0cd267332ecb087e47ada4c5ac456af2afc78b`.
 - [`2026_oss_rst.pdf`](../../../pdf/hwpx/2026_oss_rst.pdf) — SHA-256 `bec53a601cc7714a40ca340d26f971d1ab49eeb355682fc9db7b15cd5e04c86e`.
