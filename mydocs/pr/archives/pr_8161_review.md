@@ -6,6 +6,7 @@
 
 ## 접수와 적용
 
+- 리베이스 후 코드 후보: `1f8e948ab443c6f963413e45eb330aab1294ca9f`, 기준 `upstream/devel`: `da39c536613a4bd543dc72b63a556183efc0383f`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
 - 원 PR: [#8161](https://github.com/edwardkim/rhwp/pull/8161), 작성자 `planet6897`, reviewer `jangster77`.
 - 원 PR head 조회값: `bd786fc5fefb94126ac146411f603c9cbcf336a6`. 현재 원 PR head는 기여자 마지막 커밋 뒤의 devel merge이며 merge commit은 제외했다.
 - 마지막 적용 원본: `431c6a7b508305673e954b796eaff59fd295715e`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
@@ -21,12 +22,12 @@
 
 ## 체리픽과 보정
 
-- 원본 `df9d84afad9c965579465e9c95362f4bd0a7a67e` → 통합 `859a62eebb6ec03ea8a9fc0e2848d0956bb8f18a`.
-- 원본 `97a95fdb89dc60dc395fd6cf9a2a6899f2729a74` → 통합 `9b59df521c9c427dfb9e8ea352d2337213cc3bb3`.
-- 원본 `5476c862d9d02f5795e73d52dc137099de036bf7` → 통합 `d187d6762df9e77e5aba15b6558e2a540914852e`.
-- 원본 `fe19ddb8729eaedc3ed8010c24d0a1cf51bd394f` → 통합 `4e084badab6e26b1bde142c1ab4bea635d08b230`.
-- 원본 `32148bff81330f3a6dadcab850c14d8c9dc0f441` → 통합 `2dc6adff5d258785b8701ed30e84cf2749ec82ab`.
-- 원본 `431c6a7b508305673e954b796eaff59fd295715e` → 통합 `03d70548e14677ac9911f60664dfb5331bfacb11`.
+- 원본 `df9d84afad9c965579465e9c95362f4bd0a7a67e` → 통합 `fe2f1d422453095a7077625a353691272bf58b8a` (리베이스 전 `859a62eebb6ec03ea8a9fc0e2848d0956bb8f18a`).
+- 원본 `97a95fdb89dc60dc395fd6cf9a2a6899f2729a74` → 통합 `fa15a388578323352a9735bdea7212ecd34be948` (리베이스 전 `9b59df521c9c427dfb9e8ea352d2337213cc3bb3`).
+- 원본 `5476c862d9d02f5795e73d52dc137099de036bf7` → 통합 `0f3b844b66a1ba0b9209679051b186b91e86451d` (리베이스 전 `d187d6762df9e77e5aba15b6558e2a540914852e`).
+- 원본 `fe19ddb8729eaedc3ed8010c24d0a1cf51bd394f` → 통합 `ba452bf4fed40bfc8e56b02667eb996bc77553ce` (리베이스 전 `4e084badab6e26b1bde142c1ab4bea635d08b230`).
+- 원본 `32148bff81330f3a6dadcab850c14d8c9dc0f441` → 통합 `391b5c0d904c0faadca067f91dc5c81571c3016c` (리베이스 전 `2dc6adff5d258785b8701ed30e84cf2749ec82ab`).
+- 원본 `431c6a7b508305673e954b796eaff59fd295715e` → 통합 `1a5c8fb0dc71a7be794dac14b314c60f52e360be` (리베이스 전 `03d70548e14677ac9911f60664dfb5331bfacb11`).
 
 `src/renderer/mod.rs`의 `LatinSlotMetrics` 복제 필드 충돌에서 새 base의 `native_otf_metrics`와 PR의 `source_font_is_hft`를 함께 보존했다.
 

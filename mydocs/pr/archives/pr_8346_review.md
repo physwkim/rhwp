@@ -6,6 +6,7 @@
 
 ## 접수와 적용
 
+- 리베이스 후 코드 후보: `1f8e948ab443c6f963413e45eb330aab1294ca9f`, 기준 `upstream/devel`: `da39c536613a4bd543dc72b63a556183efc0383f`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
 - 원 PR: [#8346](https://github.com/edwardkim/rhwp/pull/8346), 작성자 `planet6897`, reviewer `jangster77`.
 - 원 PR head 조회값: `923ae70036a6b6e5ce94bf9c45cd2f8326cf8551`. 현재 원 PR head는 기여자 마지막 커밋 뒤의 devel merge이며 merge commit은 제외했다.
 - 마지막 적용 원본: `75f167cee39b69f10d1eff25e5f9f55b18e64783`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
@@ -21,9 +22,9 @@ HWP3 찾아보기 표시를 읽고 암호 문서의 배경·간격·표·하이�
 
 ## 체리픽과 보정
 
-- 원본 `e33936a264f866cd8e7e43890962eb10eb67c5a6` → 통합 `e2222e48890db0fd4dd3b4957aca3be507996752`.
-- 원본 `42b992cd1288db2c3fa3bc8dbf007a1524805cdc` → 통합 `39656f5b783a297ffe83d02d4af43f15f02bd1ae`.
-- 원본 `75f167cee39b69f10d1eff25e5f9f55b18e64783` → 통합 `b5aa0c7e9489190a7cea82783e45f895f9628bca`.
+- 원본 `e33936a264f866cd8e7e43890962eb10eb67c5a6` → 통합 `b9affc985f058cb677b0be6d0899df531f1e633c` (리베이스 전 `e2222e48890db0fd4dd3b4957aca3be507996752`).
+- 원본 `42b992cd1288db2c3fa3bc8dbf007a1524805cdc` → 통합 `d4807c6a9a801ffeb78a3b1a7ff0fba6b5c8e5ee` (리베이스 전 `39656f5b783a297ffe83d02d4af43f15f02bd1ae`).
+- 원본 `75f167cee39b69f10d1eff25e5f9f55b18e64783` → 통합 `dc59b5e5bc40bbc3948d3e0c96c54afe0e4ac58f` (리베이스 전 `b5aa0c7e9489190a7cea82783e45f895f9628bca`).
 
 `src/parser/hwp3/mod.rs` 충돌은 이전 보정 당시와 양쪽 Git blob이 동일해 기존 해결본을 재사용했다.
 

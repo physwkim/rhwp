@@ -6,6 +6,7 @@
 
 ## 접수와 적용
 
+- 리베이스 후 코드 후보: `1f8e948ab443c6f963413e45eb330aab1294ca9f`, 기준 `upstream/devel`: `da39c536613a4bd543dc72b63a556183efc0383f`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
 - 원 PR: [#8405](https://github.com/edwardkim/rhwp/pull/8405), 작성자 `planet6897`, reviewer `jangster77`.
 - 원 PR head 조회값: `df932ebcf6144b468bebab8f5a2f2d2379807a8a`. 조회 시 원 PR head와 마지막 체리픽 원본이 일치한다.
 - 마지막 적용 원본: `df932ebcf6144b468bebab8f5a2f2d2379807a8a`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
@@ -21,10 +22,10 @@
 
 ## 체리픽과 보정
 
-- 원본 `df7fec9af6114d680955bc0d28d0330e0e6cb124` → 통합 `a540a4cc4aa7aa0e241e64ed9be2d4d13a4ad00f`.
-- 원본 `e5b82ad49a4b11063d05eb258c7b54f172411602` → 통합 `22851c438d58697237d66fe52ff63ceb8bd09348`.
-- 원본 `1f863bd2afcdf097fdf6f5dd39865b86cdba0a32` → 통합 `53c10a41131c500290fa5d6ad6bcb9beaaaa2f7c`.
-- 원본 `df932ebcf6144b468bebab8f5a2f2d2379807a8a` → 통합 `a24ba81ef81b7e5fca5599d559209a7bfa888a74`.
+- 원본 `df7fec9af6114d680955bc0d28d0330e0e6cb124` → 통합 `b3194d0e08b1066a9286b755923b79feab0e032b` (리베이스 전 `a540a4cc4aa7aa0e241e64ed9be2d4d13a4ad00f`).
+- 원본 `e5b82ad49a4b11063d05eb258c7b54f172411602` → 통합 `6ba65f667da5a158361956338cdff18d49dd6a36` (리베이스 전 `22851c438d58697237d66fe52ff63ceb8bd09348`).
+- 원본 `1f863bd2afcdf097fdf6f5dd39865b86cdba0a32` → 통합 `32b35b20c9fa94fedbbe1922217b3e04ac2c7574` (리베이스 전 `53c10a41131c500290fa5d6ad6bcb9beaaaa2f7c`).
+- 원본 `df932ebcf6144b468bebab8f5a2f2d2379807a8a` → 통합 `788f7904c40eff5cee02eee71ef6c4ff16df0b69` (리베이스 전 `a24ba81ef81b7e5fca5599d559209a7bfa888a74`).
 
 `src/renderer/composer.rs`와 `line_breaking.rs`의 충돌은 이전 보정 당시와 양쪽 Git blob이 동일해 기존 해결본을 재사용했다.
 

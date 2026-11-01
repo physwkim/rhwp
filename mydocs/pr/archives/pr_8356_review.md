@@ -6,6 +6,7 @@
 
 ## 접수와 적용
 
+- 리베이스 후 코드 후보: `1f8e948ab443c6f963413e45eb330aab1294ca9f`, 기준 `upstream/devel`: `da39c536613a4bd543dc72b63a556183efc0383f`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
 - 원 PR: [#8356](https://github.com/edwardkim/rhwp/pull/8356), 작성자 `planet6897`, reviewer `jangster77`.
 - 원 PR head 조회값: `ceb9167e3a6f9bdc564013971039130faf153677`. 조회 시 원 PR head와 마지막 체리픽 원본이 일치한다.
 - 마지막 적용 원본: `ceb9167e3a6f9bdc564013971039130faf153677`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
@@ -21,7 +22,7 @@ HWPX 내보내기 검증에서 저장기의 의도된 정규화를 손실로 잘
 
 ## 체리픽과 보정
 
-- 원본 `ceb9167e3a6f9bdc564013971039130faf153677` → 통합 `9f098c382a8a1fbe45d50da3bc623abacef87702`.
+- 원본 `ceb9167e3a6f9bdc564013971039130faf153677` → 통합 `6db76bcdb9dbfd341534f2ecf142a4f82ecff653` (리베이스 전 `9f098c382a8a1fbe45d50da3bc623abacef87702`).
 
 `src/cli/commands/conversion.rs` 충돌은 이전 보정 당시와 양쪽 Git blob이 동일해 기존 해결본을 재사용했다.
 
