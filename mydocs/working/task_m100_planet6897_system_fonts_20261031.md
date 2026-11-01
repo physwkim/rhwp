@@ -1,5 +1,17 @@
 # planet6897 통합 검토 — 시스템 글꼴 공급
 
+> **기준 실행 파일 정정 (2026-11-01):** 이 기록에서 `base-rhwp` SHA
+> `dea7033a0dd1d17a53a8c602e2f5fbe045b040f49e2880f99a341cd5f669ea11`을
+> #8397 고정 커밋의 원 PR 실행 파일로 사용한 동일 환경 비교는 잠정 자료다.
+> 깨끗한 `99a176b7cb34fde54454c03433baa1382b2de9fa`에서 다시 빌드한 실행 파일
+> SHA `545abe7699e2aa8f527d6868e390b1dff76bade449823e05773c0443d10204e3`의
+> 같은 GIF JPEG 출력은 이전 `base-rhwp`와 다르고 현재 후보와 같다. 이전 기준
+> 실행 파일의 빌드 상태는 확인되지 않아, 아래에서 그 파일과 비교한 원 PR 대비
+> 하락·동일 판정은 새 실행 파일로 재확인하기 전까지 확정하지 않는다. 제출된
+> TSV와 직접 대조한 수치는 별도로 보존한다.
+> `base-99a-fresh-build.log`, `verify-fresh-base-gif.log`,
+> `fresh-original-revalidation.log`를 참고한다.
+
 2026-11-01 06:24 KST에 GitHub API로 원 PR head를 재확인했다. #8161은
 `bd786fc5fefb94126ac146411f603c9cbcf336a6`, #8346은
 `923ae70036a6b6e5ce94bf9c45cd2f8326cf8551`로 각 개별 리뷰에 기록한 조회값과
@@ -1670,3 +1682,11 @@ Native·fresh WASM 수치와 전체 쪽 최저·쪽수 일치 근거를 확인�
 (`issue8079-issue5169-hwp-vs-hwpx-pdf-comparison.log`). 입력과 같은 HWP의
 Print PDF로 주석을 정정했으며 assertion이나 검사 동작은 바꾸지 않았다. 이
 동등성 확인은 최종 후보의 Native·fresh WASM 전쪽 검증을 대신하지 않는다.
+
+회귀 주석 근거 점검 중 #8282의 HWPX 4개와 해당 한컴 2020 Print PDF를
+현재 `6be28314c5` 코드의 고정 Native 실행 파일로 전쪽 재출력했다. 네 파일은
+각각 1쪽이고 모두 raw `100.00%`다(`regression-8282-native-current.log`,
+`regression-8282-native-current/`의 문서별 `silhouette.tsv`). 기여자 제출 TSV의
+Native·WASM도 각각 1쪽 `100.00%`임을 확인했다
+(`issue8282-original-tsv-evidence-inventory.log`). 제출 WASM은 현재 코드의 fresh
+WASM이 아니므로 최종 양쪽 98% 및 확대 판독 조건을 통과한 것으로 아직 기록하지 않는다.
