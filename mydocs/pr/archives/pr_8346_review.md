@@ -19,15 +19,17 @@
 
 HWP3 찾아보기·개요 번호 검사 `issue_8304_hwp3_index_mark` 9건은 모두 통과했다. 최소 시스템 글꼴 환경에서 라이선스가 확인된 저장소 테스트 글꼴을 명시적으로 제공해 전체 12,349건을 실행했다. 12,347건이 통과했고 편람 261쪽 JPEG 채움 색상 HWP·HWPX 검사 2건이 실패했다. 두 실패는 오래된 JPEG 인코더 캐시를 재컴파일한 뒤 집중 검사에서 모두 통과했다 ([재검사 로그](../../../output/pr-review/planet6897-ordered-20261031/jpeg-clean-cache-focused.log)). 충돌한 PDF 세션의 HWP·HWPX 메타데이터 예산 검사는 모두 통과했다. [전체 로그](../../../output/pr-review/planet6897-ordered-20261031/rebase-full-minfont-verified-nextest.log).
 
-재컴파일 후 전체 회귀와 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
+제품 코드 커밋 `d536455b4e`에서 최소 글꼴 환경의 전체 회귀 12,368건은 모두 통과했다. 이후 변경은 테스트 이동과 서식 정리이며 이동한 검사만 재실행한다. #8389·#8397 기준 1,770쪽의 Native·fresh WASM 전쪽 비교가 진행 중이므로 아직 최종 통과로 판정하지 않는다.
 
-## 원 PR 주장 페이지의 최신 Native 증거
+## 원 PR 주장 페이지의 최신 Native·fresh WASM 증거
 
-암호 HWP3 원본 `samples/HWP3-password-123456.hwp`을 동일 원본의 한컴 2020 Print와 대조했다. 전 24쪽 최저 raw는 98.27%다. 원 PR이 명시한 찾아보기·하이퍼텍스트 상자와 본문 위치를 각각 3·17·20·24쪽에서 대조했다.
+암호 HWP3 원본 `samples/HWP3-password-123456.hwp`을 동일 원본의 한컴 2020 Print와 대조했다. 전 24쪽 최저 raw는 Native 98.27%, fresh WASM 98.28%다. 원 PR이 명시한 찾아보기·하이퍼텍스트 상자와 본문 위치를 각각 3·17·20·24쪽에서 대조했다.
 
-[Native 전쪽 TSV](../assets/planet6897_integration_final/pr8346/native-hwp3-original.tsv) · [3쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p003-review.png) · [17쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-review.png) · [17쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png) · [20쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p020-review.png) · [24쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p024-review.png)
+[Native 전쪽 TSV](../assets/planet6897_integration_final/pr8346/native-hwp3-original.tsv) · [fresh WASM 전쪽 TSV](../assets/planet6897_integration_final/pr8346/wasm-hwp3-original.tsv) · [3쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p003-review.png) · [17쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-review.png) · [17쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png) · [20쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p020-review.png) · [24쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p024-review.png)
 
 ![원 PR의 HWP3 원본 17쪽 Native overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png)
+
+같은 17쪽의 fresh WASM [review](../assets/planet6897_integration_final/pr8346/wasm-hwp3-p017-review.png) · [overlay](../assets/planet6897_integration_final/pr8346/wasm-hwp3-p017-overlay.png)도 확인했다. 첫 쪽 배경과 2쪽 이후 배경 제거, 3·7·20·24쪽의 표·본문·상자에 해당하는 두 경로의 이미지는 같은 증거 폴더에 있다.
 
 원 PR의 첫 쪽 배경과 후속 쪽 배경 제거 주장은 [1쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p001-review.png) · [1쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p001-overlay.png), [2쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p002-review.png) · [2쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p002-overlay.png)로 확인한다. 문단 간격 대조에는 [7쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p007-review.png) · [7쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p007-overlay.png)를 연결했다.
 

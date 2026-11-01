@@ -19,15 +19,17 @@
 
 굵은 글자의 보통 면 전진폭 검사 `issue_8079_bold_regular_advance` 4건은 모두 통과했다. 최소 시스템 글꼴 환경에서 라이선스가 확인된 저장소 테스트 글꼴을 명시적으로 제공해 전체 12,349건을 실행했다. 12,347건이 통과했고 편람 261쪽 JPEG 채움 색상 HWP·HWPX 검사 2건이 실패했다. 두 실패는 오래된 JPEG 인코더 캐시를 재컴파일한 뒤 집중 검사에서 모두 통과했다 ([재검사 로그](../../../output/pr-review/planet6897-ordered-20261031/jpeg-clean-cache-focused.log)). 충돌한 PDF 세션의 HWP·HWPX 메타데이터 예산 검사는 모두 통과했다. [전체 로그](../../../output/pr-review/planet6897-ordered-20261031/rebase-full-minfont-verified-nextest.log).
 
-재컴파일 후 전체 회귀와 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
+제품 코드 커밋 `d536455b4e`에서 최소 글꼴 환경의 전체 회귀 12,368건은 모두 통과했다. 이후 변경은 테스트 이동과 서식 정리이며 이동한 검사만 재실행한다. #8389·#8397 기준 1,770쪽의 Native·fresh WASM 전쪽 비교가 진행 중이므로 아직 최종 통과로 판정하지 않는다.
 
-## 원 PR 주장 페이지의 최신 Native 증거
+## 원 PR 주장 페이지의 최신 Native·fresh WASM 증거
 
-원 PR이 제시한 `113424_evaluation_guideline.hwpx` 5쪽을 같은 한컴 2024 Print PDF와 대조했다. 해당 문서의 전체 46쪽 최저 raw는 91.51%이며, 후속 보정 대상 46쪽은 99.74%다.
+원 PR이 제시한 `113424_evaluation_guideline.hwpx` 5쪽을 같은 한컴 2024 Print PDF와 대조했다. 전체 46쪽 최저 raw는 Native 91.51%, fresh WASM 91.60%다. 주장 페이지 5쪽은 양쪽 99.94%, 지적된 28쪽은 양쪽 100.00%, 후속 보정 대상 46쪽은 각각 99.74%와 100.00%다.
 
-[Native 전쪽 TSV](../assets/planet6897_integration_final/pr8161/native-113424.tsv) · [5쪽 review](../assets/planet6897_integration_final/pr8161/native-113424-p005-review.png) · [5쪽 overlay](../assets/planet6897_integration_final/pr8161/native-113424-p005-overlay.png) · [46쪽 review](../assets/planet6897_integration_final/pr8161/native-113424-p046-review.png) · [46쪽 overlay](../assets/planet6897_integration_final/pr8161/native-113424-p046-overlay.png)
+[Native 전쪽 TSV](../assets/planet6897_integration_final/pr8161/native-113424.tsv) · [fresh WASM 전쪽 TSV](../assets/planet6897_integration_final/pr8161/wasm-113424.tsv) · [5쪽 review](../assets/planet6897_integration_final/pr8161/native-113424-p005-review.png) · [5쪽 overlay](../assets/planet6897_integration_final/pr8161/native-113424-p005-overlay.png) · [46쪽 review](../assets/planet6897_integration_final/pr8161/native-113424-p046-review.png) · [46쪽 overlay](../assets/planet6897_integration_final/pr8161/native-113424-p046-overlay.png)
 
 ![원 PR의 113424 5쪽 Native overlay](../assets/planet6897_integration_final/pr8161/native-113424-p005-overlay.png)
+
+같은 5쪽의 fresh WASM [review](../assets/planet6897_integration_final/pr8161/wasm-113424-p005-review.png) · [overlay](../assets/planet6897_integration_final/pr8161/wasm-113424-p005-overlay.png), 지적된 28쪽의 fresh WASM [review](../assets/planet6897_integration_final/pr8161/wasm-113424-p028-review.png) · [overlay](../assets/planet6897_integration_final/pr8161/wasm-113424-p028-overlay.png)를 함께 대조했다.
 
 원 PR에서 함께 제시한 다른 주장 페이지의 당시 증거는 다음과 같다. 이 자료는 원 PR 코드
 `bba7229a1b`의 출력이며 현재 통합 head의 재검증 결과와 구분한다.
