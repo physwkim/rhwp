@@ -25,6 +25,8 @@ HWP3 찾아보기·개요 번호 검사 `issue_8304_hwp3_index_mark` 9건은 모
 
 암호 HWP3 원본 `samples/HWP3-password-123456.hwp`을 동일 원본의 한컴 2020 Print와 대조했다. 전 24쪽 최저 raw는 Native 98.27%, fresh WASM 98.28%다. 원 PR이 명시한 찾아보기·하이퍼텍스트 상자와 본문 위치를 각각 3·17·20·24쪽에서 대조했다.
 
+앞서 하단 폴더 설명의 시작점이 어긋났던 3쪽은 최종 제품 코드 `d536455b4e`에서 Native 99.90%, fresh WASM 99.91%다. 두 경로의 같은 쪽을 독립 Print와 직접 비교하면 폴더 이름 다음 설명의 줄 시작과 줄바꿈이 맞고 글자 가장자리에는 차이가 남는다. 앞서 기록한 94%대 결과와 원인 추적은 중간 후보에 관한 이력이다. [Native review](../assets/planet6897_integration_final/pr8346/native-hwp3-p003-review.png) · [Native overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p003-overlay.png) · [WASM review](../assets/planet6897_integration_final/pr8346/wasm-hwp3-p003-review.png) · [WASM overlay](../assets/planet6897_integration_final/pr8346/wasm-hwp3-p003-overlay.png).
+
 [Native 전쪽 TSV](../assets/planet6897_integration_final/pr8346/native-hwp3-original.tsv) · [fresh WASM 전쪽 TSV](../assets/planet6897_integration_final/pr8346/wasm-hwp3-original.tsv) · [3쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p003-review.png) · [17쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-review.png) · [17쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png) · [20쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p020-review.png) · [24쪽 review](../assets/planet6897_integration_final/pr8346/native-hwp3-p024-review.png)
 
 ![원 PR의 HWP3 원본 17쪽 Native overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png)
