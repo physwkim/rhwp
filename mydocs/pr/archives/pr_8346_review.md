@@ -6,7 +6,7 @@
 
 ## 접수와 적용
 
-- 리베이스 후 코드 후보: `1f8e948ab443c6f963413e45eb330aab1294ca9f`, 기준 `upstream/devel`: `da39c536613a4bd543dc72b63a556183efc0383f`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
+- 리베이스 후 코드 후보: `1c375f616a16166343ad0425b8e841ed999b990a`, 기준 `upstream/devel`: `2adaa0859f94f30f7dc3b994ee27c34a872906ba`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
 - 원 PR: [#8346](https://github.com/edwardkim/rhwp/pull/8346), 작성자 `planet6897`, reviewer `jangster77`.
 - 원 PR head 조회값: `923ae70036a6b6e5ce94bf9c45cd2f8326cf8551`. 현재 원 PR head는 기여자 마지막 커밋 뒤의 devel merge이며 merge commit은 제외했다.
 - 마지막 적용 원본: `75f167cee39b69f10d1eff25e5f9f55b18e64783`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
@@ -15,6 +15,12 @@
 
 후속 `e1f03ffbb3`은 Python 테스트 준비, `af175315e7`과 `e920cba6b0`은 회귀 검사 주석, `a63bb719de`는 검증 경과를 기록했다. `5d1294811b`은 전체 그림의 잘림 오판을 보정했다. `e1b8ab0f54`, `d6fe30c3ad`, `0897582f6c`, `8c4eca265e`에 Native 진단, #8410 집중 6건 통과와 글꼴 대조를 기록했으며 새 코드의 전쪽 출력 검증이 필요하다.
 
+## 2026-11-01 리베이스 후 전체 회귀
+
+HWP3 찾아보기·개요 번호 검사 `issue_8304_hwp3_index_mark` 9건은 모두 통과했다. 최소 시스템 글꼴 환경에서 라이선스가 확인된 저장소 테스트 글꼴을 명시적으로 제공해 전체 12,349건을 실행했다. 12,347건이 통과했고 편람 261쪽 JPEG 채움 색상 HWP·HWPX 검사 2건이 실패했다. 충돌한 PDF 세션의 HWP·HWPX 메타데이터 예산 검사는 모두 통과했다. [전체 로그](../../../output/pr-review/planet6897-ordered-20261031/rebase-full-minfont-verified-nextest.log).
+
+실패 원인 분석과 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
+
 ## 변경 주장과 검토 관점
 
 HWP3 찾아보기 표시를 읽고 암호 문서의 배경·간격·표·하이퍼텍스트 처리를 보정한다.
@@ -22,9 +28,9 @@ HWP3 찾아보기 표시를 읽고 암호 문서의 배경·간격·표·하이�
 
 ## 체리픽과 보정
 
-- 원본 `e33936a264f866cd8e7e43890962eb10eb67c5a6` → 통합 `b9affc985f058cb677b0be6d0899df531f1e633c` (리베이스 전 `e2222e48890db0fd4dd3b4957aca3be507996752`).
-- 원본 `42b992cd1288db2c3fa3bc8dbf007a1524805cdc` → 통합 `d4807c6a9a801ffeb78a3b1a7ff0fba6b5c8e5ee` (리베이스 전 `39656f5b783a297ffe83d02d4af43f15f02bd1ae`).
-- 원본 `75f167cee39b69f10d1eff25e5f9f55b18e64783` → 통합 `dc59b5e5bc40bbc3948d3e0c96c54afe0e4ac58f` (리베이스 전 `b5aa0c7e9489190a7cea82783e45f895f9628bca`).
+- 원본 `e33936a264f866cd8e7e43890962eb10eb67c5a6` → 통합 `af3f5d82d6c43a8e0b6f7ba7cc45940533510752` (이전 통합 `b9affc985f058cb677b0be6d0899df531f1e633c`, 그 이전 `e2222e48890db0fd4dd3b4957aca3be507996752`).
+- 원본 `42b992cd1288db2c3fa3bc8dbf007a1524805cdc` → 통합 `3060cc2c6c168563123c8faed799093187345150` (이전 통합 `d4807c6a9a801ffeb78a3b1a7ff0fba6b5c8e5ee`, 그 이전 `39656f5b783a297ffe83d02d4af43f15f02bd1ae`).
+- 원본 `75f167cee39b69f10d1eff25e5f9f55b18e64783` → 통합 `698c906a2bd5bd8ad1ca38cc3a38d36aa6e539cf` (이전 통합 `dc59b5e5bc40bbc3948d3e0c96c54afe0e4ac58f`, 그 이전 `b5aa0c7e9489190a7cea82783e45f895f9628bca`).
 
 `src/parser/hwp3/mod.rs` 충돌은 이전 보정 당시와 양쪽 Git blob이 동일해 기존 해결본을 재사용했다.
 

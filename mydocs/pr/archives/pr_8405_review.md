@@ -6,7 +6,7 @@
 
 ## 접수와 적용
 
-- 리베이스 후 코드 후보: `1f8e948ab443c6f963413e45eb330aab1294ca9f`, 기준 `upstream/devel`: `da39c536613a4bd543dc72b63a556183efc0383f`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
+- 리베이스 후 코드 후보: `1c375f616a16166343ad0425b8e841ed999b990a`, 기준 `upstream/devel`: `2adaa0859f94f30f7dc3b994ee27c34a872906ba`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
 - 원 PR: [#8405](https://github.com/edwardkim/rhwp/pull/8405), 작성자 `planet6897`, reviewer `jangster77`.
 - 원 PR head 조회값: `df932ebcf6144b468bebab8f5a2f2d2379807a8a`. 조회 시 원 PR head와 마지막 체리픽 원본이 일치한다.
 - 마지막 적용 원본: `df932ebcf6144b468bebab8f5a2f2d2379807a8a`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
@@ -15,6 +15,12 @@
 
 후속 `e1f03ffbb3`은 Python 테스트 준비, `af175315e7`과 `e920cba6b0`은 회귀 검사 주석, `a63bb719de`는 검증 경과를 기록했다. `5d1294811b`은 전체 그림의 잘림 오판을 보정했다. `e1b8ab0f54`, `d6fe30c3ad`, `0897582f6c`, `8c4eca265e`에 Native 진단, #8410 집중 6건 통과와 글꼴 대조를 기록했으며 새 코드의 전쪽 출력 검증이 필요하다.
 
+## 2026-11-01 리베이스 후 전체 회귀
+
+어울림 그림·글상자 관련 `issue_8282` 11건과 `issue_8399` 8건은 모두 통과했다. 최소 시스템 글꼴 환경에서 라이선스가 확인된 저장소 테스트 글꼴을 명시적으로 제공해 전체 12,349건을 실행했다. 12,347건이 통과했고 편람 261쪽 JPEG 채움 색상 HWP·HWPX 검사 2건이 실패했다. 충돌한 PDF 세션의 HWP·HWPX 메타데이터 예산 검사는 모두 통과했다. [전체 로그](../../../output/pr-review/planet6897-ordered-20261031/rebase-full-minfont-verified-nextest.log).
+
+실패 원인 분석과 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
+
 ## 변경 주장과 검토 관점
 
 비TAC 어울림 글상자의 바깥 여백 상자를 본문 줄 배제와 개체 배치에 함께 사용한다.
@@ -22,10 +28,10 @@
 
 ## 체리픽과 보정
 
-- 원본 `df7fec9af6114d680955bc0d28d0330e0e6cb124` → 통합 `b3194d0e08b1066a9286b755923b79feab0e032b` (리베이스 전 `a540a4cc4aa7aa0e241e64ed9be2d4d13a4ad00f`).
-- 원본 `e5b82ad49a4b11063d05eb258c7b54f172411602` → 통합 `6ba65f667da5a158361956338cdff18d49dd6a36` (리베이스 전 `22851c438d58697237d66fe52ff63ceb8bd09348`).
-- 원본 `1f863bd2afcdf097fdf6f5dd39865b86cdba0a32` → 통합 `32b35b20c9fa94fedbbe1922217b3e04ac2c7574` (리베이스 전 `53c10a41131c500290fa5d6ad6bcb9beaaaa2f7c`).
-- 원본 `df932ebcf6144b468bebab8f5a2f2d2379807a8a` → 통합 `788f7904c40eff5cee02eee71ef6c4ff16df0b69` (리베이스 전 `a24ba81ef81b7e5fca5599d559209a7bfa888a74`).
+- 원본 `df7fec9af6114d680955bc0d28d0330e0e6cb124` → 통합 `b90b757f1d0926e89c181b04a23b36c405da32fc` (이전 통합 `b3194d0e08b1066a9286b755923b79feab0e032b`, 그 이전 `a540a4cc4aa7aa0e241e64ed9be2d4d13a4ad00f`).
+- 원본 `e5b82ad49a4b11063d05eb258c7b54f172411602` → 통합 `3015c983757d049811de710beca3a45e74c4fab2` (이전 통합 `6ba65f667da5a158361956338cdff18d49dd6a36`, 그 이전 `22851c438d58697237d66fe52ff63ceb8bd09348`).
+- 원본 `1f863bd2afcdf097fdf6f5dd39865b86cdba0a32` → 통합 `917f0ef7a99933d58c60b99104cd78818713bd9e` (이전 통합 `32b35b20c9fa94fedbbe1922217b3e04ac2c7574`, 그 이전 `53c10a41131c500290fa5d6ad6bcb9beaaaa2f7c`).
+- 원본 `df932ebcf6144b468bebab8f5a2f2d2379807a8a` → 통합 `9c3d19e02ed76e042c2cfa31dfad410385dc34f8` (이전 통합 `788f7904c40eff5cee02eee71ef6c4ff16df0b69`, 그 이전 `a24ba81ef81b7e5fca5599d559209a7bfa888a74`).
 
 `src/renderer/composer.rs`와 `line_breaking.rs`의 충돌은 이전 보정 당시와 양쪽 Git blob이 동일해 기존 해결본을 재사용했다.
 

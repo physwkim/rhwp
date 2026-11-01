@@ -6,7 +6,7 @@
 
 ## 접수와 적용
 
-- 리베이스 후 코드 후보: `1f8e948ab443c6f963413e45eb330aab1294ca9f`, 기준 `upstream/devel`: `da39c536613a4bd543dc72b63a556183efc0383f`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
+- 리베이스 후 코드 후보: `1c375f616a16166343ad0425b8e841ed999b990a`, 기준 `upstream/devel`: `2adaa0859f94f30f7dc3b994ee27c34a872906ba`. 체리픽 대응표에는 새 SHA와 리베이스 전 SHA를 함께 기록했다.
 - 원 PR: [#8161](https://github.com/edwardkim/rhwp/pull/8161), 작성자 `planet6897`, reviewer `jangster77`.
 - 원 PR head 조회값: `bd786fc5fefb94126ac146411f603c9cbcf336a6`. 현재 원 PR head는 기여자 마지막 커밋 뒤의 devel merge이며 merge commit은 제외했다.
 - 마지막 적용 원본: `431c6a7b508305673e954b796eaff59fd295715e`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
@@ -15,6 +15,12 @@
 
 후속 `e1f03ffbb3`은 Python 테스트 준비, `af175315e7`과 `e920cba6b0`은 회귀 검사 주석, `a63bb719de`는 검증 경과를 기록했다. `5d1294811b`은 전체 그림의 잘림 오판을 보정했다. `e1b8ab0f54`, `d6fe30c3ad`, `0897582f6c`, `8c4eca265e`에 Native 진단, #8410 집중 6건 통과와 글꼴 대조를 기록했으며 새 코드의 전쪽 출력 검증이 필요하다.
 
+## 2026-11-01 리베이스 후 전체 회귀
+
+굵은 글자의 보통 면 전진폭 검사 `issue_8079_bold_regular_advance` 4건은 모두 통과했다. 최소 시스템 글꼴 환경에서 라이선스가 확인된 저장소 테스트 글꼴을 명시적으로 제공해 전체 12,349건을 실행했다. 12,347건이 통과했고 편람 261쪽 JPEG 채움 색상 HWP·HWPX 검사 2건이 실패했다. 충돌한 PDF 세션의 HWP·HWPX 메타데이터 예산 검사는 모두 통과했다. [전체 로그](../../../output/pr-review/planet6897-ordered-20261031/rebase-full-minfont-verified-nextest.log).
+
+실패 원인 분석과 최신 코드의 Native·fresh WASM 전쪽 대조가 남아 있어 최종 통과로 판정하지 않는다. 기존 1,770쪽 대조 결과는 리베이스 전 후보의 자료다.
+
 ## 변경 주장과 검토 관점
 
 굵은 TrueType의 잉크는 Bold face를 쓰고 전진폭은 같은 family의 보통 face를 사용하며 HFT는 제외한다. 저장 줄과 새 줄을 함께 다룬다.
@@ -22,12 +28,12 @@
 
 ## 체리픽과 보정
 
-- 원본 `df9d84afad9c965579465e9c95362f4bd0a7a67e` → 통합 `fe2f1d422453095a7077625a353691272bf58b8a` (리베이스 전 `859a62eebb6ec03ea8a9fc0e2848d0956bb8f18a`).
-- 원본 `97a95fdb89dc60dc395fd6cf9a2a6899f2729a74` → 통합 `fa15a388578323352a9735bdea7212ecd34be948` (리베이스 전 `9b59df521c9c427dfb9e8ea352d2337213cc3bb3`).
-- 원본 `5476c862d9d02f5795e73d52dc137099de036bf7` → 통합 `0f3b844b66a1ba0b9209679051b186b91e86451d` (리베이스 전 `d187d6762df9e77e5aba15b6558e2a540914852e`).
-- 원본 `fe19ddb8729eaedc3ed8010c24d0a1cf51bd394f` → 통합 `ba452bf4fed40bfc8e56b02667eb996bc77553ce` (리베이스 전 `4e084badab6e26b1bde142c1ab4bea635d08b230`).
-- 원본 `32148bff81330f3a6dadcab850c14d8c9dc0f441` → 통합 `391b5c0d904c0faadca067f91dc5c81571c3016c` (리베이스 전 `2dc6adff5d258785b8701ed30e84cf2749ec82ab`).
-- 원본 `431c6a7b508305673e954b796eaff59fd295715e` → 통합 `1a5c8fb0dc71a7be794dac14b314c60f52e360be` (리베이스 전 `03d70548e14677ac9911f60664dfb5331bfacb11`).
+- 원본 `df9d84afad9c965579465e9c95362f4bd0a7a67e` → 통합 `ce20cafc71b9163de08719fc3b1628d022e34b29` (이전 통합 `fe2f1d422453095a7077625a353691272bf58b8a`, 그 이전 `859a62eebb6ec03ea8a9fc0e2848d0956bb8f18a`).
+- 원본 `97a95fdb89dc60dc395fd6cf9a2a6899f2729a74` → 통합 `2c61f0a7b3aa0376b209073a01db7fde696e32f0` (이전 통합 `fa15a388578323352a9735bdea7212ecd34be948`, 그 이전 `9b59df521c9c427dfb9e8ea352d2337213cc3bb3`).
+- 원본 `5476c862d9d02f5795e73d52dc137099de036bf7` → 통합 `494ed857b23936853b52cc1b5ddee18970b3354a` (이전 통합 `0f3b844b66a1ba0b9209679051b186b91e86451d`, 그 이전 `d187d6762df9e77e5aba15b6558e2a540914852e`).
+- 원본 `fe19ddb8729eaedc3ed8010c24d0a1cf51bd394f` → 통합 `31a9bfa47bd27c0368c6e75bca4b6b659f5bf7c9` (이전 통합 `ba452bf4fed40bfc8e56b02667eb996bc77553ce`, 그 이전 `4e084badab6e26b1bde142c1ab4bea635d08b230`).
+- 원본 `32148bff81330f3a6dadcab850c14d8c9dc0f441` → 통합 `93f8a19f9d1e7b01d180e65fd7176d9d8beb6c3b` (이전 통합 `391b5c0d904c0faadca067f91dc5c81571c3016c`, 그 이전 `2dc6adff5d258785b8701ed30e84cf2749ec82ab`).
+- 원본 `431c6a7b508305673e954b796eaff59fd295715e` → 통합 `07d9d61f4523524b2715090aaed34155b04d6fab` (이전 통합 `1a5c8fb0dc71a7be794dac14b314c60f52e360be`, 그 이전 `03d70548e14677ac9911f60664dfb5331bfacb11`).
 
 `src/renderer/mod.rs`의 `LatinSlotMetrics` 복제 필드 충돌에서 새 base의 `native_otf_metrics`와 PR의 `source_font_is_hft`를 함께 보존했다.
 
