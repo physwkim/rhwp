@@ -1585,3 +1585,13 @@ Native 대조이며, 제출 당시 TSV 수치와 fresh WASM의 별도 무하락 
 Native 출력에 대한 결과이며 제출 당시 TSV 및 fresh WASM의 별도 대조를
 대신하지 않는다. 세 문서 추가 Native 실행은 모두 종료 코드 0이다
 (`source-bold-boundary-additional-full.log`).
+
+기존 PR의 편람 HWPX Native 보존 측정은 완료된 193/383쪽 중 145쪽에서
+제출 당시 `100.000000000000%`보다 낮은 `99.988181298875%`를 보였다.
+원 PR 실행 파일과 `6be28314c5` 코드 후보를 같은 시스템 전체 글꼴·같은 PDF로
+145쪽에 대해 각각 재출력하니 둘 다 `99.988181298875%`였고 PDF 래스터 SHA도
+같았다(`handbook-hwpx-p145-same-system-comparison.log`). 제출 기준과 동일한
+환경이라고 단정할 수 없으며, 이 결과를 제출 TSV 무하락 통과로 기록하지 않는다.
+두 RHWP PNG는 동일하지 않으며 RGB 차이 15픽셀은 글자가 있는
+`(182,638)-(330,651)` 영역에 분포한다(`handbook-hwpx-p145-image-diff.log`).
+해당 원본은 별도 PR의 보정 범위이고 이번에는 기존 PR 보존 검증으로만 다룬다.
