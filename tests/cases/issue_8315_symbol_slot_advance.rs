@@ -1,5 +1,9 @@
 //! 관계형: [#8315] 기호 슬롯 글자는 기호 슬롯 글꼴의 실제 전진폭으로 잰다.
-//! 주석 갱신: 2026-11-01T12:22:22+09:00; 직전 파일 커밋: 2026-10-31T23:19:17+09:00 (2685b526dced6ae26850be21bbefcee4682ac1bd).
+//! 주석 갱신: 2026-11-01T14:11:51+09:00; 직전 파일 커밋: 2026-11-01T13:03:06+09:00 (4024b2bf39610ec6fbe5c6a42c28ee7151e28e8b).
+//! 2026-11-01, 96 DPI, 독립 한컴 2024 Print와 2px raw 실루엣 전쪽 비교:
+//! `samples/issue8136/lang-slot-ranges.hwpx` 2쪽: Native 99.90%·98.96%(최저 98.96%),
+//! fresh WASM 99.86%·98.37%(최저 98.37%).
+//! 증거: mydocs/pr/assets/issue_8136/integration-planet6897/README.md.
 //!
 //! 입력 `samples/issue8136/lang-slot-ranges.hwpx`(#8136): 한글 맑은 고딕 · 영문 Arial · 기호 궁서,
 //! 문단마다 `가X가`. 정본 `pdf/issue8136/lang-slot-ranges-2024.pdf`(한/글 2024 Print)에서 X 의

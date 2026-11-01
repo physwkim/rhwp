@@ -1858,3 +1858,6 @@ MCP로 다시 인쇄했다. job `43cf4494-584e-49b2-9b5a-05dd90e9d1ae`, 한컴
 인쇄 출처와 같은 쪽 이미지는 `pdf/issue7092/` 및
 `mydocs/pr/assets/issue_7092/integration-planet6897/`에 보존한다. 회귀는 주석만
 갱신하고 검사 로직은 변경하지 않았다.
+
+같은 #8136 원본을 사용하는 #8315 기호 전진폭 검사에도 기존 두 쪽 Native·fresh
+WASM 측정과 Print 증거를 연결했다. 검사 함수나 제품 코드는 변경하지 않았다.
