@@ -1785,3 +1785,12 @@ Native 원점 정밀도 변경 후보 `42f64c3df533a32fb6c66ee3a8ac7c7539ce86df4
 정밀 표와 원본 측정 로그는 `output/pr-review/planet6897-ordered-20261031/`의
 `issue8136-base-current-system-wasm-exact.tsv`,
 `issue8136-original-base-system-wasm.log`다.
+
+사용자는 2026-11-01에 페이지별 무하락 판정을 Visual Sweep 표시값으로
+변경했다. 원본 실루엣 수치를 소수 셋째 자리에서 반올림해 TSV와 같이 소수 둘째
+자리로 비교하며, 같은 표시값은 통과하고 낮은 표시값은 하락이다. 페이지별로
+판정하고 다른 페이지의 상승으로 하락을 상쇄하지 않는다. 이전 정밀값은 원인
+추적용으로 보존한다. 이 기준에서 #8040 두 2쪽은 각각 기존·현재
+`100.00% → 100.00%`로 통과다. 전체 Native·WASM은 현재 실행 중이며 중간
+대조표는 `current-full-system-native-display-comparison.tsv`,
+`current-full-system-wasm-display-comparison.tsv`다.
