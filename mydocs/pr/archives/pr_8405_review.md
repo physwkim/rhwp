@@ -95,3 +95,7 @@ A·D·E는 양쪽 100.00%, P는 HWP와 HWPX 모두 양쪽 99.98%다. A의 다음
 판정하지 않는다. 기존 테스트 첫머리의 `모두 100.00%`는 현재 실측과 달라 실제 수치로
 정정했다. 원 PR의 Tight·Through와 본문 위 B·C는 테스트의 편집·재열기 경로에서도
 확인하고, 실물 원본이 저장소에 있는 A·D·E·P의 출력 증거와 구분한다.
+
+## Merge 후 contributor PR comment 계획
+
+[통합 PR #8438](https://github.com/edwardkim/rhwp/pull/8438), merge `b8338ba38be288b6e9385f5372d184649323aa9f`와 [코드 head CI](https://github.com/edwardkim/rhwp/actions/runs/41322587728)를 연결한다. D HWPX 1쪽에서 Native/fresh WASM 각각 100.00%를 확인했다. [1쪽 overlay](../assets/planet6897_integration_final/pr8405/native-D-hwpx-overlay.png)를 사용한다. 감사와 원 기여, 메인터너 보정 범위를 존댓말로 설명하고 게시 뒤 API로 확인한다.
