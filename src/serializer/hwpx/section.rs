@@ -1218,10 +1218,7 @@ where
         // 플래그가 그대로 실려 한글 2022 가 캐시를 신뢰하다 조판을 폐기한다
         // (08818: 81쪽 → 5쪽). 원본과 같게 방출을 생략해 한글이 재계산하게 한다
         // (#1380 계약). HWP5→HWPX materialize 는 별도 placeholder 를 쓰므로 무관.
-        let all_synthetic = !axis_line_segs.is_empty()
-            && axis_line_segs
-                .iter()
-                .all(|s| s.tag & LineSeg::TAG_IMPLEMENTATION_PROPERTY != 0);
+        let all_synthetic = line_segs_are_all_synthetic(axis_line_segs);
         Ok(
             if !axis_line_segs.is_empty() && position_axis_intact && !all_synthetic {
                 // IR 기반 출력 — 원본 lineseg 값 보존 (#177)
@@ -1255,6 +1252,28 @@ where
         )
     })()
     .map_err(|error| SerializeError::XmlError(format!("HWPX lineseg: {error}")))
+}
+
+/// [#5847] 문단의 저장 줄이 **모두** reflow 합성(bit 31)인가 — HWPX 저장은 이런 문단의
+/// `linesegarray` 를 내지 않는다. `export-hwpx --verify` 의 기대 IR 도 이 판정을 쓴다(#8306).
+pub(crate) fn line_segs_are_all_synthetic(line_segs: &[LineSeg]) -> bool {
+    !line_segs.is_empty()
+        && line_segs
+            .iter()
+            .all(|s| s.tag & LineSeg::TAG_IMPLEMENTATION_PROPERTY != 0)
+}
+
+/// [#6869] HWPX 저장이 접는(내지 않는) 쪽 번호 위치 컨트롤의 인덱스 — 한 문단에서 첫 번째를
+/// 뺀 나머지다. 방출은 `SerializeContext::para_page_num_pos_emitted` 로 같은 규칙을 따르고,
+/// `export-hwpx --verify` 의 기대 IR 은 이 목록의 자리를 걷어낸다(#8306).
+pub(crate) fn hwpx_collapsed_page_number_pos_indices(para: &Paragraph) -> Vec<usize> {
+    para.controls
+        .iter()
+        .enumerate()
+        .filter(|(_, control)| matches!(control, Control::PageNumberPos(_)))
+        .map(|(index, _)| index)
+        .skip(1)
+        .collect()
 }
 
 /// [#5140] 한컴 사용자 정의 기호를 HWPX 표기(평면 15 보충 PUA)로 올린다.
@@ -1313,6 +1332,9 @@ pub(crate) struct InlineCursor<'a> {
     pub mark_owned_by_prev: &'a [bool],
     /// 다음에 방출할 `title_marks` 인덱스
     pub mark_idx: usize,
+    /// [#8305] 조각 말미의 앞 run 소유 표시 방출을 잠시 미룬다 — 표시 시작 유닛에
+    /// 글자 모양 경계가 있으면 글만 먼저 닫고 경계를 끊은 뒤 표시를 내야 한다.
+    pub hold_prev_owned_marks: bool,
     /// 지금까지 방출한 문단 텍스트의 문자 수
     pub char_idx: usize,
     /// [#4895] 이 문단의 소프트 하이픈을 `<hp:hypen/>` 요소로 내릴지 여부.
@@ -1628,7 +1650,10 @@ where
     }
     // [#5537] 조각 말미 — 닫히는 run 소유의 표시(경계 유닛 = 표시 끝 유닛)는 여기서
     // 방출한다. 다음 run 머리로 넘기면 재파싱 char_shapes 경계가 8유닛 무너진다.
-    cursor.flush_prev_owned_marks_at_fragment_end_with_storage(&mut t_xml, &mut buf, storage)?;
+    if !cursor.hold_prev_owned_marks {
+        cursor
+            .flush_prev_owned_marks_at_fragment_end_with_storage(&mut t_xml, &mut buf, storage)?;
+    }
     // [#6956] 형광펜 닫는 표지는 런 **끝**에 오는 것이 한컴 실측 형태다. 문자 루프는
     // 글자 **앞**에서만 흘리므로 여기서 현재 위치에 걸린 것을 마저 낸다.
     cursor.flush_markpen_at_fragment_end_with_storage(&mut t_xml, &mut buf, storage)?;
@@ -2021,11 +2046,12 @@ where
     for (idx, c) in para.text.chars().enumerate() {
         let char_pos = para.char_offsets.get(idx).copied().unwrap_or(running_pos);
         if splitter.needs_cut(char_pos) {
-            flush_text_fragment_with_storage(
-                &mut splitter.content,
+            flush_text_fragment_before_cut_with_storage(
+                splitter,
                 &mut text_buf,
                 &para.tab_extended,
                 cursor,
+                char_pos,
                 storage,
             )?;
             splitter.cut_before_with_storage(char_pos, storage)?;
@@ -2043,12 +2069,7 @@ where
         storage,
     )?;
     // 마지막 문자 뒤에 남은 제목 차례 표시 — 빈 조각으로 한 번 더 낸다.
-    flush_trailing_title_marks_with_storage(
-        &mut splitter.content,
-        &para.tab_extended,
-        cursor,
-        storage,
-    )?;
+    flush_trailing_title_marks_with_storage(splitter, cursor, running_pos, storage)?;
 
     Ok(())
 }
@@ -2414,12 +2435,8 @@ where
         storage
             .push_str(&mut splitter.content, &t)
             .map_err(xml_error)?;
-        flush_trailing_title_marks_with_storage(
-            &mut splitter.content,
-            &para.tab_extended,
-            &mut cursor,
-            storage,
-        )?;
+        let text_units: u32 = para.text.chars().map(char_utf16_width).sum();
+        flush_trailing_title_marks_with_storage(&mut splitter, &mut cursor, text_units, storage)?;
         // 슬롯이 하나도 없는데 char_count 는 슬롯을 주장하면(파서가 못 읽은 컨트롤 —
         // 예: 차례표지 0x0008) 방출 축이 원본보다 짧다 — 이때 lineseg 를 그대로 쓰면
         // 한글이 그 문단부터 본문을 폐기한다(#4778). 축 붕괴를 호출부에 알린다.
@@ -2835,11 +2852,12 @@ where
 
         // 문자 위치의 경계 — 문자는 새 run 소속 (규칙 1)
         if splitter.needs_cut(char_pos) {
-            flush_text_fragment_with_storage(
-                &mut splitter.content,
+            flush_text_fragment_before_cut_with_storage(
+                &mut splitter,
                 &mut text_buf,
                 &para.tab_extended,
                 &mut cursor,
+                char_pos,
                 storage,
             )?;
             splitter.cut_before_with_storage(char_pos, storage)?;
@@ -2901,10 +2919,10 @@ where
         &mut cursor,
         storage,
     )?;
-    flush_trailing_title_marks_with_storage(
-        &mut splitter.content,
-        &para.tab_extended,
+    expected_utf16_pos = flush_trailing_title_marks_with_storage(
+        &mut splitter,
         &mut cursor,
+        expected_utf16_pos,
         storage,
     )?;
 
@@ -3222,38 +3240,113 @@ where
     Ok(())
 }
 
-/// 문단 끝에 남은 제목 차례 표시를 빈 `<hp:t>` 조각으로 방출한다.
+/// 문자 위치 `char_pos` 의 글자 모양 경계를 적용하기 전에 쌓인 글을 방출한다.
 ///
-/// 조각 경계에서 flush 를 건너뛰는 이유는 표시가 **다음** run 소속이기 때문인데,
-/// 다음 run 이 없는 문단 말미에서는 그 규칙이 그대로 유실이 된다.
-fn flush_trailing_title_marks(
-    out: &mut String,
+/// [#8305] 이 문자 앞 갭에 **앞 run 소유** 제목 차례 표시가 있고(#5537) 그 표시의
+/// 시작 유닛에도 경계가 있으면(한컴 실측: `글 run | 표시만 담은 run | 다음 글 run`),
+/// 글 → 표시 시작 경계 → 표시 순으로 낸다. 함께 내면 두 경계가 `char_pos` 에서 한꺼번에
+/// 끊겨 표시 run 이 비고 재파싱 경계가 표시 폭(8유닛)만큼 밀린다.
+fn flush_text_fragment_before_cut_with_storage<S: crate::storage::Storage>(
+    splitter: &mut RunSplitter,
+    text_buf: &mut String,
     tab_extended: &[[u16; 7]],
     cursor: &mut InlineCursor<'_>,
-) {
-    flush_trailing_title_marks_with_storage(out, tab_extended, cursor, &crate::storage::Unbounded)
-        .expect("unbounded run XML")
-}
-
-fn flush_trailing_title_marks_with_storage<S: crate::storage::Storage>(
-    out: &mut String,
-    tab_extended: &[[u16; 7]],
-    cursor: &mut InlineCursor<'_>,
+    char_pos: u32,
     storage: &S,
 ) -> Result<(), SerializeError>
 where
     S::Error: std::fmt::Display,
 {
-    if cursor.mark_idx < cursor.title_marks.len() {
+    let idx = cursor.char_idx + text_buf.chars().count();
+    let pending = cursor.title_marks[cursor.mark_idx..]
+        .iter()
+        .take_while(|m| m.char_idx == idx)
+        .count() as u32;
+    let owned_by_prev = cursor
+        .mark_owned_by_prev
+        .get(cursor.mark_idx)
+        .copied()
+        .unwrap_or(false);
+    let mark_start = char_pos.saturating_sub(pending * 8);
+    if pending > 0 && owned_by_prev && mark_start < char_pos && splitter.needs_cut(mark_start) {
+        if !text_buf.is_empty() {
+            cursor.hold_prev_owned_marks = true;
+            let t = render_hp_t_content_with_storage(text_buf, tab_extended, cursor, storage);
+            cursor.hold_prev_owned_marks = false;
+            storage
+                .push_str(&mut splitter.content, &t?)
+                .map_err(xml_error)?;
+            text_buf.clear();
+        }
+        splitter.cut_before_with_storage(mark_start, storage)?;
+    }
+    flush_text_fragment_with_storage(
+        &mut splitter.content,
+        text_buf,
+        tab_extended,
+        cursor,
+        storage,
+    )
+}
+
+/// 문단 끝에 남은 제목 차례 표시를 빈 `<hp:t>` 조각으로 방출한다.
+///
+/// 조각 경계에서 flush 를 건너뛰는 이유는 표시가 **다음** run 소속이기 때문인데,
+/// 다음 run 이 없는 문단 말미에서는 그 규칙이 그대로 유실이 된다.
+///
+/// [#8305] 표시는 UTF-16 축에서 8유닛을 차지한다. `pos` 는 첫 남은 표시의 시작
+/// 유닛이다. 표시마다 그 시작 유닛의 글자 모양 경계를 먼저 적용하고(규칙 1 — 경계와
+/// 같은 위치의 콘텐츠는 새 run 소속) 방출 뒤 8 을 진행한 위치를 돌려준다. 경계를 나중에
+/// 끊으면 표시가 앞 run 에 실려 재파싱 경계가 8 밀리고, 위치를 진행하지 않으면 표시
+/// 뒤 말미 슬롯(`newNum` 등)이 표시 끝 경계 앞 run 에 실린다(한컴 9.x HWPX 실측).
+fn flush_trailing_title_marks(
+    splitter: &mut RunSplitter,
+    cursor: &mut InlineCursor<'_>,
+    pos: u32,
+) -> u32 {
+    flush_trailing_title_marks_with_storage(splitter, cursor, pos, &crate::storage::Unbounded)
+        .expect("unbounded run XML")
+}
+
+fn flush_trailing_title_marks_with_storage<S: crate::storage::Storage>(
+    splitter: &mut RunSplitter,
+    cursor: &mut InlineCursor<'_>,
+    mut pos: u32,
+    storage: &S,
+) -> Result<u32, SerializeError>
+where
+    S::Error: std::fmt::Display,
+{
+    while cursor.mark_idx < cursor.title_marks.len() {
+        splitter.cut_before_with_storage(pos, storage)?;
+        let mut t_xml = storage.string("<hp:t>").map_err(xml_error)?;
+        let mut buf = String::new();
+        cursor.flush_markpen_at_fragment_end_with_storage(&mut t_xml, &mut buf, storage)?;
+        while let Some(m) = cursor.title_marks.get(cursor.mark_idx) {
+            if splitter.needs_cut(pos) {
+                break;
+            }
+            storage
+                .push_str(
+                    &mut t_xml,
+                    &xml_value(
+                        storage,
+                        format_args!(
+                            r#"<hp:titleMark ignore="{}"/>"#,
+                            if m.ignore { 1 } else { 0 }
+                        ),
+                    )?,
+                )
+                .map_err(xml_error)?;
+            cursor.mark_idx += 1;
+            pos = pos.saturating_add(8);
+        }
+        storage.push_str(&mut t_xml, "</hp:t>").map_err(xml_error)?;
         storage
-            .push_str(
-                out,
-                &render_hp_t_content_with_storage("", tab_extended, cursor, storage)?,
-            )
+            .push_str(&mut splitter.content, &t_xml)
             .map_err(xml_error)?;
     }
-
-    Ok(())
+    Ok(pos)
 }
 
 fn render_control_slot(out: &mut String, control: &Control, ctx: &mut SerializeContext) {
@@ -4113,11 +4206,13 @@ fn render_page_num_with_storage<S: crate::storage::Storage>(
 where
     S::Error: std::fmt::Display,
 {
-    // dash_char 기본값은 '-' (모델: 항상 '-'); '\0'이면 '-'로 폴백.
-    let side = if pn.dash_char == '\0' {
-        '-'
+    // [#7633] HWP5 `pgnp` 의 줄표 문자가 0 이면 줄표 없는 쪽 번호다(한컴 PDF `1`, hwpspec).
+    // 한/글은 `sideChar=""` 를 줄표 없음으로 그린다 — 종전처럼 `'-'` 로 채우면 `- 1 -` 가 된다.
+    // 속성을 생략하면 스키마 기본값 `"-"` 로 읽힐 수 있으므로 빈 값을 명시한다.
+    let side = if pn.dash_char == '\0' || pn.dash_char.is_whitespace() {
+        String::new()
     } else {
-        pn.dash_char
+        xml_value(storage, pn.dash_char)?
     };
     xml_value(
         storage,
@@ -4125,7 +4220,7 @@ where
             r#"<hp:ctrl><hp:pageNum pos="{}" formatType="{}" sideChar="{}"/></hp:ctrl>"#,
             page_num_pos_to_str(pn.position),
             page_num_format_to_str(pn.format),
-            xml_escape_with_storage(&xml_value(storage, side)?, storage)?,
+            xml_escape_with_storage(&side, storage)?,
         ),
     )
 }

@@ -908,11 +908,24 @@ impl HwpDocument {
                 }
                 programs.push((array.to_vec(), 0));
             }
-            prepared.insert((request.family, request.bold, request.italic), programs);
+            prepared.insert(
+                (
+                    request.family,
+                    request.bold,
+                    request.italic,
+                    request.source_ttf,
+                ),
+                programs,
+            );
         }
         self.prepare_native_otf_fonts_multiple_with(|request| {
             prepared
-                .remove(&(request.family.clone(), request.bold, request.italic))
+                .remove(&(
+                    request.family.clone(),
+                    request.bold,
+                    request.italic,
+                    request.source_ttf,
+                ))
                 .unwrap_or_default()
         })
         .map_err(JsValue::from)
@@ -931,6 +944,22 @@ impl HwpDocument {
             .map_err(JsValue::from)
     }
 
+    #[wasm_bindgen(js_name = registerNativePuaFontForSource)]
+    pub fn register_native_pua_font_for_source_wasm(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_native_pua_font_for_source(
+            family, bold, italic, source_ttf, bytes, face_index,
+        )
+        .map_err(JsValue::from)
+    }
+
     #[wasm_bindgen(js_name = registerLiteralFigureSpaceFont)]
     pub fn register_literal_figure_space_font_wasm(
         &mut self,
@@ -942,6 +971,22 @@ impl HwpDocument {
     ) -> Result<bool, JsValue> {
         self.register_literal_figure_space_font(family, bold, italic, bytes, face_index)
             .map_err(JsValue::from)
+    }
+
+    #[wasm_bindgen(js_name = registerLiteralFigureSpaceFontForSource)]
+    pub fn register_literal_figure_space_font_for_source_wasm(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_literal_figure_space_font_for_source(
+            family, bold, italic, source_ttf, bytes, face_index,
+        )
+        .map_err(JsValue::from)
     }
 
     #[wasm_bindgen(js_name = clearNativePuaFonts)]

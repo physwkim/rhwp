@@ -1156,6 +1156,19 @@ pub(super) fn prepare_fit_budget_with_storage<S: crate::storage::Storage>(
         absorbed_spacing_before,
         Some(para_idx),
     );
+    // 배제 처리가 저장된 표 끝으로 커서를 다시 옮긴 경우에도 동일한
+    // 원본 후속 줄 계약을 소비한다. paint는 같은 공유 간격을 적용한다.
+    let shared = crate::renderer::float_placement::stored_visible_host_successor_spacing(
+        &st.current_items,
+        paragraphs,
+        para_idx,
+        fmt.spacing_before,
+        (st.profile.hwpx_stored_layout() || st.profile.hwp5_stored_pagination_layout())
+            && !st.profile.session_edited(),
+        st.current_height,
+        dpi,
+    );
+    st.reclaim_flow_by(shared.min(st.current_height));
     st.resolve_computed_float_first_line(para_idx, fmt);
     let footnote_margin_addback =
         st.take_paragraph_footnote_margin_addback(strict_after_empty_host_float);

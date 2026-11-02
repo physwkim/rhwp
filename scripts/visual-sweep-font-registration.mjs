@@ -29,6 +29,22 @@ export function selectMetafileFontFaces(fonts, requests) {
   return selected;
 }
 
+function missingAfterUnicodeRange(owner, bytes, text, missing) {
+  if (typeof missing !== 'string' || typeof owner?.getFontSymbolUnicodeRange !== 'function') return missing;
+  const ranges = owner.getFontSymbolUnicodeRange(new Uint8Array(bytes), 0);
+  if (!ranges) return missing;
+  const allowed = ranges.split(',').map(value => {
+    const match = /^U\+([0-9A-F]+)(?:-([0-9A-F]+))?$/i.exec(value.trim());
+    if (!match) throw Error('글꼴 기호 공급 범위가 유효하지 않습니다.');
+    return [parseInt(match[1], 16), parseInt(match[2] ?? match[1], 16)];
+  });
+  const absent = new Set(missing);
+  return [...text].filter(character => absent.has(character) || !allowed.some(([start, end]) => {
+    const code = character.codePointAt(0);
+    return code >= start && code <= end;
+  })).join('');
+}
+
 // 실제 글리프를 공급하는 후보만 고른다. 빈 요청은 기존 전체 사다리를 유지한다.
 export async function selectTextEffectFontFaces(owner, fonts, requests, loadBytes) {
   const selected = new Set();
@@ -41,24 +57,38 @@ export async function selectTextEffectFontFaces(owner, fonts, requests, loadByte
     let remaining = request.text;
     for (const family of request.families) {
       for (const key of selectMetafileFontFaces(fonts, [{...request, families: [family]}])) {
-        const record = fonts.find(face => face.families.some(name =>
+        const group = fonts.filter(face => face.families.some(name =>
           `${name.toLowerCase()}|${face.weight}|${face.style}` === key));
-        if (!record) continue;
-        const bytes = await loadBytes(record);
-        if (!bytes) continue;
-        // catalogue의 faceIndex는 원 TTC의 출처다. HTTP로 공급한 개별 SFNT는
-        // installCanvasFont/registerMetafileFont와 같은 0번 face를 조회한다.
-        const missing = typeof owner.fontMissingText === 'function'
-          ? owner.fontMissingText(new Uint8Array(bytes), 0, remaining)
-          : owner.fontSupportsText(new Uint8Array(bytes), 0, remaining) ? '' : remaining;
-        if (typeof missing !== 'string' || missing === remaining) continue;
-        selected.add(key);
-        remaining = missing;
-        break;
+        // 실제 Canvas 공급과 같은 후보·순서만 확인한다. CFF가 없는 경우
+        // 공급하지 않는 두 번째 TTF를 glyph 공급자로 판정하면 안 된다.
+        const cff = group.filter(face => face.openTypeCff);
+        const records = cff.length ? [...cff, ...group.filter(face => !face.openTypeCff)] : group.slice(0, 1);
+        for (const record of records) {
+          const bytes = await loadBytes(record);
+          if (!bytes) continue;
+          // 원 TTC의 faceIndex가 아니라 공급한 개별 SFNT의 0번 face다.
+          let missing = typeof owner.fontMissingText === 'function'
+            ? owner.fontMissingText(new Uint8Array(bytes), 0, remaining)
+            : owner.fontSupportsText(new Uint8Array(bytes), 0, remaining) ? '' : remaining;
+          missing = missingAfterUnicodeRange(owner, bytes, remaining, missing);
+          if (typeof missing !== 'string' || missing === remaining) continue;
+          selected.add(key);
+          remaining = missing;
+          if (!remaining) break;
+        }
+        if (!remaining) break;
       }
       if (!remaining) break;
     }
   }
+  return selected;
+}
+
+// 메타파일과 그림자 모두 실제 문자가 필요한 공급자만 paint에 등록한다.
+export async function selectSweepPaintFontFaces(owner, fonts, metafileRequests, effectRequests, loadBytes) {
+  const selected = await selectTextEffectFontFaces(owner, fonts, metafileRequests, loadBytes);
+  const effects = await selectTextEffectFontFaces(owner, fonts, effectRequests, loadBytes);
+  for (const key of effects) selected.add(key);
   return selected;
 }
 
@@ -90,7 +120,7 @@ export async function installCanvasFont(family, bytes, descriptors, sourceOwner 
   return font;
 }
 
-// 실제 Canvas에서 선택한 HFT 대체 OTF의 같은 바이트를 공통 조판에 공급한다.
+// Canvas에서 선택한 원본 TrueType과 HFT 대체 OTF를 출처별로 조판에 공급한다.
 export async function prepareHftOtfFonts(owner, fonts, loadBytes) {
   if (typeof owner?.getNativeOtfFontRequests !== 'function'
       || typeof owner?.prepareNativeOtfFonts !== 'function') {
@@ -100,29 +130,33 @@ export async function prepareHftOtfFonts(owner, fonts, loadBytes) {
   const programs = new Map(), loaded = new Map(), proofs = [];
   for (const request of requests) {
     const selected = selectMetafileFontFaces(fonts, [{families: [request.family],
-      weight: request.bold ? 700 : 400, italic: request.italic}]);
+      weight: request.source_ttf ? 400 : (request.bold ? 700 : 400), italic: request.italic}]);
     for (const key of selected) {
       const matches = fonts.filter(record => record.families.some(name =>
         `${name.toLowerCase()}|${record.weight}|${record.style}` === key));
       const cff = matches.filter(record => record.openTypeCff);
-      const records = cff.length ? cff : matches.slice(0, 1);
+      const records = request.source_ttf
+        ? matches.filter(record => !record.openTypeCff).slice(0, 1)
+        : (cff.length ? cff : matches.slice(0, 1));
       const selected = [], seen = new Set();
       for (const record of records) {
         if (seen.has(record.sha256)) continue;
         seen.add(record.sha256);
         let bytes = loaded.get(record.sha256);
         if (!bytes) { bytes = await loadBytes(record); loaded.set(record.sha256, bytes); }
-        if (bytes.byteLength < 4 || new DataView(bytes).getUint32(0) !== 0x4f54544f) continue;
+        if (bytes.byteLength < 4) continue;
+        const signature = new DataView(bytes).getUint32(0);
+        if (request.source_ttf ? ![0x00010000, 0x74727565].includes(signature) : signature !== 0x4f54544f) continue;
         selected.push(new Uint8Array(bytes));
-        proofs.push({family: request.family, bold: request.bold, italic: request.italic,
+        proofs.push({family: request.family, bold: request.bold, italic: request.italic, sourceTtf: Boolean(request.source_ttf),
           weight: record.weight, style: record.style, sha256: record.sha256});
       }
-      if (selected.length) programs.set(JSON.stringify([request.family, request.bold, request.italic]), selected);
+      if (selected.length) programs.set(JSON.stringify([request.family, request.bold, request.italic, Boolean(request.source_ttf)]), selected);
     }
   }
   owner.prepareNativeOtfFonts(raw => {
     const request = JSON.parse(raw);
-    const selected = programs.get(JSON.stringify([request.family, request.bold, request.italic]));
+    const selected = programs.get(JSON.stringify([request.family, request.bold, request.italic, Boolean(request.source_ttf)]));
     return selected?.length === 1 ? selected[0] : selected ?? null;
   });
   return proofs;
@@ -184,7 +218,10 @@ export async function prepareNativePuaFonts(owner, fonts, loadBytes) {
         const matches = fonts.filter(font => font.families.some(name =>
           `${name.toLowerCase()}|${font.weight}|${font.style}` === key));
         const cff = matches.filter(record => record.openTypeCff);
-        const records = cff.length ? [...cff, ...matches.filter(record => !record.openTypeCff)] : matches.slice(0, 1);
+        const ttf = matches.filter(record => !record.openTypeCff);
+        const records = request.source_ttf
+          ? [...ttf, ...cff]
+          : cff.length ? [...cff, ...ttf] : matches.slice(0, 1);
         const seen = new Set();
         for (const record of records) {
           if (seen.has(record.sha256)) continue;
@@ -198,10 +235,19 @@ export async function prepareNativePuaFonts(owner, fonts, loadBytes) {
               false, false, null, records.length < 2, records.length < 2);
             loaded.set(programKey, bytes);
           }
-          const register = request.literal_figure_space
+          const registerSource = request.literal_figure_space
+            ? owner.registerLiteralFigureSpaceFontForSource : owner.registerNativePuaFontForSource;
+          const registerLegacy = request.literal_figure_space
             ? owner.registerLiteralFigureSpaceFont : owner.registerNativePuaFont;
-          if (typeof register === 'function' && register.call(owner, request.family,
-            request.bold, request.italic, new Uint8Array(bytes), 0)) {
+          if (request.source_ttf && typeof registerSource !== 'function') {
+            throw Error('원본 TTF별 PUA 등록 API가 없는 WASM입니다.');
+          }
+          const registered = typeof registerSource === 'function'
+            ? registerSource.call(owner, request.family, request.bold, request.italic,
+              Boolean(request.source_ttf), new Uint8Array(bytes), 0)
+            : typeof registerLegacy === 'function' && registerLegacy.call(owner, request.family,
+              request.bold, request.italic, new Uint8Array(bytes), 0);
+          if (registered) {
             proofs.push({family: request.family, literalFigureSpace: Boolean(request.literal_figure_space), selectedFamily: family, weight: record.weight,
               style: record.style, sha256: record.sha256, sourceSha256: record.sourceSha256});
             accepted = true;

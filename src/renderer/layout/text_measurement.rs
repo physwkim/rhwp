@@ -926,19 +926,21 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
             script_metrics: styles.script_metrics,
             native_pua_metrics: (!styles.has_exact_font_source(char_style_id, lang_index))
                 .then(|| {
-                    styles.native_pua_fonts.get(
+                    styles.native_pua_fonts.get_for_source(
                         cs.font_family_for_lang(lang_index),
                         cs.bold,
                         cs.italic,
+                        cs.source_ttf_for_lang(lang_index),
                     )
                 })
                 .flatten(),
             native_otf_metrics: (!styles.has_exact_font_source(char_style_id, lang_index))
                 .then(|| {
-                    styles.native_pua_fonts.get_otf(
+                    styles.native_pua_fonts.get_otf_for_source(
                         cs.font_family_for_lang(lang_index),
                         cs.bold,
                         cs.italic,
+                        cs.source_ttf_for_lang(lang_index),
                     )
                 })
                 .flatten(),
@@ -948,6 +950,8 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
             top_underline_phase: None,
             fixed_glyph_advances: false,
             source_font_is_hft: cs.source_hft_for_lang(lang_index),
+            source_font_is_ttf: cs.source_ttf_for_lang(lang_index),
+            source_verified_hft_bold_tracking: cs.verified_hft_bold_tracking_for_lang(lang_index),
             source_hwp3_hft_bold: (styles.hwp3_variant || styles.source_hwp3_native)
                 && cs.source_hft_for_lang(lang_index),
             hft_print_frame: cs.hft_print_frame_for_lang(lang_index),
@@ -1046,10 +1050,11 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
                         font_family: storage.string(cs.font_family_for_lang(1))?,
                         native_otf_metrics: (!styles.has_exact_font_source(char_style_id, 1))
                             .then(|| {
-                                styles.native_pua_fonts.get_otf(
+                                styles.native_pua_fonts.get_otf_for_source(
                                     cs.font_family_for_lang(1),
                                     cs.bold,
                                     cs.italic,
+                                    cs.source_ttf_for_lang(1),
                                 )
                             })
                             .flatten(),
@@ -1062,6 +1067,10 @@ pub(crate) fn try_resolved_to_text_style<S: crate::renderer::style_resolver::sto
                             storage,
                         )?,
                         font_metric_trusted: cs.font_metric_trusted_for_lang(1),
+                        source_font_is_hft: cs.source_hft_for_lang(1),
+                        source_font_is_ttf: cs.source_ttf_for_lang(1),
+                        source_verified_hft_bold_tracking: cs
+                            .verified_hft_bold_tracking_for_lang(1),
                         letter_spacing: resolved_letter_spacing(styles, char_style_id, 1),
                         ratio: cs.ratio_for_lang(1),
                     }))
@@ -1654,6 +1663,7 @@ fn measure_char_width_embedded_decision<'a>(
         font_size,
         false,
         false,
+        false,
     )
 }
 
@@ -1678,6 +1688,11 @@ fn css_primary_face(font_family: &str) -> &str {
 
 /// [#7092] `font_metric_trusted` — 메트릭 표를 그 글꼴 자신의 폭으로 믿을 수 있는지
 /// (TTF 선언 · 대체 없음). 스타일을 모르는 호출은 거짓으로 종전 측정을 따른다.
+///
+/// [#8079] `regular_bold_advance` — 굵은 글자의 전진폭을 같은 family 보통 표에서 읽는다.
+/// 선언 face 가 TrueType 일 때만 참이다(HFT 프로그램은 제 Bold 전진폭을 쓴다).
+/// 스타일을 모르는 호출은 거짓으로 종전 측정을 따른다.
+#[allow(clippy::too_many_arguments)]
 fn measure_char_width_embedded_decision_for_font<'a>(
     font_family: &'a str,
     bold: bool,
@@ -1686,6 +1701,7 @@ fn measure_char_width_embedded_decision_for_font<'a>(
     font_size: f64,
     font_metric_trusted: bool,
     hft_hangul_face: bool,
+    regular_bold_advance: bool,
 ) -> EmbeddedWidthDecision<'a> {
     let primary_name = css_primary_face(font_family);
     if let Some(em) = font_metrics_data::original_glyph_advance_em(primary_name, bold, italic, c) {
@@ -1748,6 +1764,13 @@ fn measure_char_width_embedded_decision_for_font<'a>(
                 character_match: "miss",
             };
         };
+        // [#8079] 굵은 글자는 Bold 면으로 그리되 전진폭은 같은 family 보통 면의 값이다.
+        // 보통 표에 없는 글자는 Bold 폭을 그대로 쓴다(결측을 0 폭으로 만들지 않는다).
+        let glyph_w = regular_bold_advance
+            .then(|| font_metrics_data::regular_advance_metric(mm.metric))
+            .flatten()
+            .and_then(|regular| regular.get_width(c))
+            .unwrap_or(glyph_w);
         // 확인된 TrueType 프로그램의 cmap/hmtx는 표 모양으로 추측한 결측보다 우선한다.
         // 실제 글리프가 1em이어도 Latin-1 표가 0/1em으로만 구성될 수 있다.
         // 검증된 face·문자만 lookup에 있으며 HFT·치환·불명 face의 호환 폭은 유지한다.
@@ -1786,7 +1809,16 @@ fn measure_char_width_embedded_decision_for_font<'a>(
         //    26.93px = 0.645 em 이다(반각 20.87px 이 아니다). 같은 HFT 이름이라도
         //    HWP3 시대 저장본만 반각으로 조판된다.
         let hft_hangul_halfwidth_ascii = hft_hangul_face && c.is_ascii_graphic();
-        let is_halfwidth_punct = matches!(c, '\u{2018}'..='\u{2027}');
+        // [#8315] 기호 슬롯 글자 `† ‡ • ‥ …`(#8136)는 한/글이 기호 슬롯 글꼴의 전진폭을 그대로
+        // 쓴다. 기호 슬롯 글꼴만 바꾼 합성 입력(한/글 2024 Print)에서 궁서·바탕·돋움·굴림·굴림체
+        // ·HY견명조·HY중고딕·휴먼명조·한양신명조 모두 `‥`·`…` 가 hmtx 1.0em(Print 1.012)이고,
+        // 맑은 고딕·함초롬바탕은 표의 좁은 값(0.44·0.74 / 0.64·0.96) 그대로다. 반각으로 누른
+        // 글꼴은 없다. 이 범위의 나머지(따옴표 = 영문 슬롯, `‣` `․` `‧`)만 종전 규칙을 따른다.
+        let is_halfwidth_punct = matches!(c, '\u{2018}'..='\u{2027}')
+            && !matches!(
+                c,
+                '\u{2020}' | '\u{2021}' | '\u{2022}' | '\u{2025}' | '\u{2026}'
+            );
         // [#7092] 고정폭 표의 작은따옴표는 글꼴이 지닌 전각이 진짜 값이다. `·` 는 이미
         // `is_monospace_metric` 으로 이 갈래를 빼 두었는데, `‘`·`’` 는 face 를 보지 않고
         // 전부 0.3em 으로 눌러 왔다. 저장소 한컴 정본 623개 전수(앞 6쪽·리더 반복 제외,
@@ -1814,10 +1846,6 @@ fn measure_char_width_embedded_decision_for_font<'a>(
             && is_monospace_metric(mm.metric))
             || (matches!(c, '\u{2018}' | '\u{2019}' | '\u{201C}' | '\u{201D}')
                 && font_metric_trusted);
-        // 이 HFT overlay의 bullet은 독립 Print로 확인한 전각 글리프다.
-        // U+2018..U+2027이라는 범위만으로 실제 폭을 다시 반각으로 줄이지 않는다.
-        let hft_bullet_width_is_authentic =
-            c == '\u{2022}' && mm.metric.name == "HanyangSinMyeongJo";
         let is_narrow_unicode_punct =
             matches!(c, '\u{2018}' | '\u{2019}' | '\u{2027}') && !quote_width_is_authentic;
         // [#7092] 전각으로 **적힌** 가운뎃점은 대개 글꼴이 지닌 진짜 값이다 — 결측 글리프는
@@ -1837,11 +1865,7 @@ fn measure_char_width_embedded_decision_for_font<'a>(
                 (mm.metric.em_size as f64 * 0.3) as u16,
                 "metricNarrowPunctuationOverlay",
             )
-        } else if is_halfwidth_punct
-            && !quote_width_is_authentic
-            && !hft_bullet_width_is_authentic
-            && glyph_w >= mm.metric.em_size
-        {
+        } else if is_halfwidth_punct && !quote_width_is_authentic && glyph_w >= mm.metric.em_size {
             (mm.metric.em_size / 2, HALFWIDTH_PUNCTUATION_WIDTH_SOURCE)
         } else {
             (glyph_w, "embeddedMetric")
@@ -2084,6 +2108,12 @@ fn char_width_decision_with_hft_tracking<'a>(
             .map_or(style.original_glyph_metric_family.as_deref(), |slot| {
                 slot.original_glyph_metric_family.as_deref()
             });
+        // [#8079] 표시용 TTF의 보통 폭은 원본 프로그램의 굵은 폭이 아니다.
+        // 원본 글리프 소유가 남아 있고 유형이 미확정이면 종전 굵은 폭을 유지한다.
+        // 실제 TTF가 명시된 슬롯과 원본 프로그램 소유가 없는 슬롯은 기존 계약을 쓴다.
+        let source_hft = latin.map_or(style.source_font_is_hft, |slot| slot.source_font_is_hft);
+        let source_ttf = latin.map_or(style.source_font_is_ttf, |slot| slot.source_font_is_ttf);
+        let regular_bold_advance = !source_hft && (source_ttf || original_glyph_face.is_none());
         let implicit_symbol_em = font_metrics_data::implicit_symbol_advance_em(chars[i]);
         let original_glyph_em = implicit_symbol_em.or_else(|| {
             original_glyph_face.and_then(|face| {
@@ -2126,6 +2156,7 @@ fn char_width_decision_with_hft_tracking<'a>(
                 font_size,
                 latin.map_or(style.font_metric_trusted, |l| l.font_metric_trusted),
                 latin.is_none() && style.hft_hangul_face,
+                regular_bold_advance,
             )
         };
         if original_glyph_em.is_none() && metric_character != c && embedded.width_px.is_some() {
@@ -2152,6 +2183,7 @@ fn char_width_decision_with_hft_tracking<'a>(
                 font_size,
                 false,
                 false,
+                regular_bold_advance,
             );
             if display_metric.width_px.is_some() {
                 embedded = display_metric;
@@ -2170,6 +2202,7 @@ fn char_width_decision_with_hft_tracking<'a>(
                 font_size,
                 latin.map_or(style.font_metric_trusted, |l| l.font_metric_trusted),
                 latin.is_none() && style.hft_hangul_face,
+                regular_bold_advance,
             );
             if fallback.width_px.is_some() {
                 embedded = fallback;
@@ -2240,6 +2273,7 @@ fn char_width_decision_with_hft_tracking<'a>(
                     font_size,
                     false,
                     false,
+                    regular_bold_advance,
                 );
                 if fallback.width_px.is_some()
                     && fallback.metric.is_some_and(|found| {
@@ -2260,6 +2294,7 @@ fn char_width_decision_with_hft_tracking<'a>(
                         font_size,
                         false,
                         false,
+                        regular_bold_advance,
                     );
                     embedded.width_source = "declaredGlyphFallbackMetric";
                     break;
@@ -2437,7 +2472,9 @@ fn char_width_decision_with_hft_tracking<'a>(
     let otf_metrics = latin.map_or(style.native_otf_metrics.as_ref(), |slot| {
         slot.native_otf_metrics.as_ref()
     });
-    let otf_advance = if cluster_len[i] <= 1
+    let source_ttf = latin.map_or(style.source_font_is_ttf, |slot| slot.source_font_is_ttf);
+    let otf_advance = if !source_ttf
+            && cluster_len[i] <= 1
             && !dash_leader
             && !c.is_whitespace()
             && !c.is_control()
@@ -2451,9 +2488,27 @@ fn char_width_decision_with_hft_tracking<'a>(
     } else {
         None
     };
+    // 등록된 원본 TrueType의 자연 전진은 폭 표가 없는 추정 글리프에만 쓴다.
+    // 확인된 원본 폭, HFT 계약, 공백·대시 규칙은 바꾸지 않는다.
+    let ttf_advance = if source_ttf
+        && cluster_len[i] <= 1
+        && !dash_leader
+        && !c.is_whitespace()
+        && !c.is_control()
+        && matches!(
+            width_source,
+            "heuristicHalfwidth" | "heuristicNarrow" | "heuristicFullwidth"
+        ) {
+        otf_metrics.and_then(|font| font.source_ttf_advance_em(c))
+    } else {
+        None
+    };
     let (base_width_raw, width_source) = if let Some(em) = otf_advance {
         em_exact = Some(em);
         (font_size * em, "nativeOtf")
+    } else if let Some(em) = ttf_advance {
+        em_exact = Some(em);
+        (font_size * em, "nativeTrueType")
     } else {
         (base_width_raw, width_source)
     };
@@ -2487,7 +2542,13 @@ fn char_width_decision_with_hft_tracking<'a>(
                 // 합성 굵기는 실제 글꼴 폭을 바꾸지 않는다. 원본에 독립적으로
                 // 확인된 꾸밈 전진 계약이 있는 경우에만 추가 폭을 적용한다.
                 if otf_metrics.is_some_and(|font| font.needs_faux_bold(c)) {
-                    if style.source_hwp3_hft_bold || source_hft_metric {
+                    let verified_source = latin
+                        .map_or(style.source_verified_hft_bold_tracking, |slot| {
+                            slot.source_verified_hft_bold_tracking
+                        });
+                    let verified_program = verified_source
+                        && otf_metrics.is_some_and(|font| font.has_verified_hft_bold_tracking(c));
+                    if style.source_hwp3_hft_bold || source_hft_metric || verified_program {
                         font_size * 0.05
                     } else {
                         let original_face = latin
@@ -2949,6 +3010,7 @@ pub fn forces_halfwidth_punct_paint(style: &TextStyle, c: char) -> bool {
         style.font_size,
         style.font_metric_trusted,
         style.hft_hangul_face,
+        !style.source_font_is_hft,
     );
     // 측정이 실제로 좁힌 프로그램만 같은 paint 보정을 소비한다.
     // 전각 기호의 metric miss나 원 프로그램 폭은 문자 범위만으로 다시 누르지 않는다.

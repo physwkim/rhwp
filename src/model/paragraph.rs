@@ -72,6 +72,11 @@ pub struct Paragraph {
     /// 재조판 입력을 무효화하거나 줄을 교체하면 지우며, 직렬화하지 않는다.
     #[serde(skip_serializing)]
     pub layout_object_projection: bool,
+    /// [#8399] 어울림 밴드 소유자(`layout_picture_band`)가 개체 바깥 상자로 확정한 줄 기하.
+    /// 합성 줄(구현 태그)이라도 이 줄의 cs/sw 가 줄 상자다 — 밴드 없는 프레임이 다시 채우지 않는다.
+    /// 줄을 교체하거나 재조판 입력을 무효화하면 지우며, 직렬화하지 않는다.
+    #[serde(skip_serializing)]
+    pub layout_float_band: bool,
     /// 본문 동적 필드의 확정 표시값. 모델 문자 위치는 유지하며 측정과 paint가 함께 읽는다.
     /// 직렬화하지 않고, 재페이지네이션이 실제 쪽 소속에서 다시 결정한다.
     #[serde(skip_serializing)]
@@ -952,6 +957,7 @@ impl Paragraph {
         self.stored_text_partition_dirty = true;
         self.hwp3_saved_space_corrections.clear();
         self.layout_object_projection = false;
+        self.layout_float_band = false;
         self.layout_field_values.clear();
     }
 
@@ -965,6 +971,7 @@ impl Paragraph {
         self.line_segs = line_segs;
         self.hwp3_saved_space_corrections.clear();
         self.layout_object_projection = false;
+        self.layout_float_band = false;
         self.layout_space_metrics.clear();
         // A fresh vector has no renderer-appended suffix and cannot reuse a
         // source-position snapshot owned by the replaced rows.
@@ -984,6 +991,16 @@ impl Paragraph {
     ) {
         self.replace_line_segs(line_segs);
         self.layout_space_metrics = metrics;
+    }
+
+    /// [#8399] 어울림 밴드 소유자의 생산 경계에서만 밴드 줄과 그 출처를 함께 발행한다.
+    pub(crate) fn publish_float_band_rows(
+        &mut self,
+        line_segs: Vec<LineSeg>,
+        metrics: Vec<(u32, SpaceMetric)>,
+    ) {
+        self.replace_line_segs_with_space_metrics(line_segs, metrics);
+        self.layout_float_band = true;
     }
 
     /// 개체 흐름 투영의 생산 경계에서만 확정 줄과 그 출처를 함께 발행한다.
@@ -1250,7 +1267,7 @@ impl Paragraph {
         if gap_end < gap_start + CTRL_CHAR_CODE_UNITS {
             return;
         }
-        self.remove_stream_slot(gap_start);
+        self.remove_stream_slot(gap_start, true);
     }
 
     /// `controls[control_idx]` 를 빼고 그 8유닛 자리를 걷어낸다.
@@ -1281,9 +1298,26 @@ impl Paragraph {
             slot_start = Some(prev_end + (control_idx - ci) as u32 * CTRL_CHAR_CODE_UNITS);
         }
         if let Some(start) = slot_start {
-            self.remove_stream_slot(start);
+            self.remove_stream_slot(start, true);
         }
+        self.remove_control_entry(control_idx)
+    }
 
+    /// [#8306] HWPX 저장이 접는 컨트롤(같은 문단의 두 번째 이후 쪽 번호 위치, #6869)의
+    /// 자리를 저장기와 같은 좌표로 걷어낸다.
+    ///
+    /// 자리는 [`Self::control_utf16_positions`] 로 찾는다(필드 끝·제목 차례 표시 같은 부수
+    /// 슬롯을 건너뛰는 공용 결과). [`Self::remove_control`] 과 달리 같은 자리로 모인 글자
+    /// 모양을 합치지 않는다 — HWPX 저장기는 그 경계를 빈 run 으로 남기므로 재파싱 IR 에도
+    /// 그대로 남는다.
+    pub(crate) fn remove_control_slot_like_hwpx_export(&mut self, control_idx: usize) -> Control {
+        if let Some(&start) = self.control_utf16_positions().get(control_idx) {
+            self.remove_stream_slot(start, false);
+        }
+        self.remove_control_entry(control_idx)
+    }
+
+    fn remove_control_entry(&mut self, control_idx: usize) -> Control {
         let removed = self.controls.remove(control_idx);
         if control_idx < self.ctrl_data_records.len() {
             self.ctrl_data_records.remove(control_idx);
@@ -1301,7 +1335,8 @@ impl Paragraph {
 
     /// `slot_start` 에서 시작하는 8유닛 자리를 스트림에서 걷어내고 같은 좌표를 쓰는
     /// 문단 메타데이터를 당긴다.
-    fn remove_stream_slot(&mut self, slot_start: u32) {
+    /// `merge_same_position_shapes` 면 같은 자리로 모인 글자모양을 하나로 합친다(편집 경로).
+    fn remove_stream_slot(&mut self, slot_start: u32, merge_same_position_shapes: bool) {
         let slot_end = slot_start + CTRL_CHAR_CODE_UNITS;
         for offset in &mut self.char_offsets {
             if *offset >= slot_end {
@@ -1319,13 +1354,15 @@ impl Paragraph {
             pull(&mut shape.start_pos);
         }
         // 같은 자리로 모인 글자모양은 그 자리 글자에 쓰이는 뒤의 것만 남긴다.
-        self.char_shapes.dedup_by(|later, kept| {
-            let same = later.start_pos == kept.start_pos;
-            if same {
-                kept.char_shape_id = later.char_shape_id;
-            }
-            same
-        });
+        if merge_same_position_shapes {
+            self.char_shapes.dedup_by(|later, kept| {
+                let same = later.start_pos == kept.start_pos;
+                if same {
+                    kept.char_shape_id = later.char_shape_id;
+                }
+                same
+            });
+        }
         for tag in &mut self.range_tags {
             pull(&mut tag.start);
             pull(&mut tag.end);
@@ -1881,6 +1918,7 @@ impl Paragraph {
     /// 문단의 원래 값을 되돌려야 한다 (Task #2342).
     pub fn split_at(&mut self, char_offset: usize) -> Paragraph {
         self.layout_object_projection = false;
+        self.layout_float_band = false;
         let control_positions = self.split_logical_control_positions();
         let split_pos = self.split_text_pos_for_logical_offset(char_offset, &control_positions);
         let nb_spaces = self.materialized_nb_space_controls();
@@ -2247,6 +2285,7 @@ impl Paragraph {
             layout_space_metrics: Vec::new(),
             hwp3_saved_space_corrections: Vec::new(),
             layout_object_projection: false,
+            layout_float_band: false,
             layout_field_values: Vec::new(),
             // 분리된 문단의 줄은 새로 계산된 것이라 조판 전용 보강 줄이 없다 (#4677).
             layout_only_fill_lines: 0,

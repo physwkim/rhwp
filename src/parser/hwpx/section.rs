@@ -2688,16 +2688,8 @@ fn parse_size_criterion(value: &str, allow_column_para: bool) -> SizeCriterion {
 }
 
 fn materialize_hwpx_table_attrs(table: &mut Table, table_record_flags: u32) {
-    const HWPX_TABLE_NUMBERING_BIT: u32 = 0x0800_0000;
-
-    // [#2697] "표 번호" 비트는 numberingType 이 실제로 TABLE 일 때만 세운다. 종전 무조건 OR
-    // 은 numberingType="PICTURE" 표에서 IR 모순(numbering_type=Picture ↔ attr=TABLE)을 만든다.
-    // 차트 파서(5800)가 PICTURE 를 별도 비트로 분기하는 것과 같은 취지.
-    let mut attr = pack_hwpx_common_obj_attr(&table.common);
-    if table.common.numbering_type == crate::model::shape::ObjectNumberingType::Table {
-        attr |= HWPX_TABLE_NUMBERING_BIT;
-    }
-    table.common.attr = attr;
+    // [#2697·#8335] 번호 범주 비트는 `pack_hwpx_common_obj_attr` 가 numberingType 에서 만든다.
+    table.common.attr = pack_hwpx_common_obj_attr(&table.common);
     // HWPX keeps semantic placement in hp:pos, while legacy layout code still reads
     // table.attr bit0 for some inline-table decisions. Only mirror the minimum
     // renderer compatibility bit here; the HWP5 storage attr is packed later by
@@ -2753,9 +2745,8 @@ fn pack_hwpx_common_obj_attr(common: &CommonObjAttr) -> u32 {
     if common.size_protect {
         attr |= 1 << 20;
     }
-    if common.hwp5_gen_shape_attr_bit26 {
-        attr |= 1 << 26;
-    }
+    // [#8335] 번호 범주는 HWP5 와 같은 bit 26-27 자리에 `numberingType` 으로 둔다.
+    attr |= common.numbering_type.hwp5_attr_bits();
     if common.hwp5_gen_shape_attr_bit28 {
         attr |= 1 << 28;
     }
@@ -2978,7 +2969,8 @@ fn parse_table_cell(
                                 b"borderFillIDRef" => cell.border_fill_id = parse_u16(&attr),
                                 b"textDirection" => {
                                     let val = attr_str(&attr);
-                                    cell.text_direction = if val == "VERTICAL" { 1 } else { 0 };
+                                    cell.text_direction =
+                                        cell_text_direction_from_hwpx(val.as_str());
                                 }
                                 b"vAlign" => {
                                     cell.vertical_align = match attr_str(&attr).as_str() {
@@ -3007,7 +2999,7 @@ fn parse_table_cell(
                                 // 유실됐다(cellPr 경로는 serializer 가 방출하지 않음).
                                 b"textDirection" => {
                                     cell.text_direction =
-                                        if attr_str(&attr) == "VERTICAL" { 1 } else { 0 };
+                                        cell_text_direction_from_hwpx(attr_str(&attr).as_str());
                                 }
                                 // [#4898] 줄바꿈 방식. 종전엔 읽지 않아 HWP5 저장에서 항상
                                 // BREAK(0)이 됐고, SQUEEZE 셀은 한글이 줄을 다시 나눠
@@ -3029,7 +3021,8 @@ fn parse_table_cell(
                                 b"borderFillIDRef" => cell.border_fill_id = parse_u16(&attr),
                                 b"textDirection" => {
                                     let val = attr_str(&attr);
-                                    cell.text_direction = if val == "VERTICAL" { 1 } else { 0 };
+                                    cell.text_direction =
+                                        cell_text_direction_from_hwpx(val.as_str());
                                 }
                                 b"vAlign" => {
                                     cell.vertical_align = match attr_str(&attr).as_str() {
@@ -3126,7 +3119,6 @@ fn parse_picture(
 ) -> Result<Control, HwpxError> {
     let mut img_attr = ImageAttr::default();
     let mut common = CommonObjAttr::default();
-    common.hwp5_gen_shape_attr_bit26 = true;
     let mut shape_attr = ShapeComponentAttr::default();
     let mut crop = CropInfo::default();
     let mut padding = crate::model::Padding::default();
@@ -3794,7 +3786,6 @@ fn parse_object_element_attrs(
     common: &mut CommonObjAttr,
     shape_attr: &mut ShapeComponentAttr,
 ) -> ObjectElementIds {
-    common.hwp5_gen_shape_attr_bit26 = true;
     let mut ids = ObjectElementIds::default();
     for attr in e.attributes().flatten() {
         match attr.key.as_ref().as_bytes() {
@@ -3843,14 +3834,6 @@ fn parse_object_element_attrs(
 
     if common.instance_id == 0 && ids.instid != 0 {
         common.instance_id = ids.instid;
-    }
-
-    // HWP5 공통 개체 attr bit 28은 한컴 2020이 `numberingType="PICTURE"`인
-    // 일반 도형/그림/묶음을 HWP로 저장할 때 함께 기록한다. 차트·OLE 경로는 이미
-    // 같은 보정을 하지만, 공용 개체 경로에서 빠지면 HWPX -> HWP 저장본의 바탕쪽과
-    // 본문 PICTURE 개체가 한컴 저장본과 다른 attr을 갖는다.
-    if common.numbering_type == crate::model::shape::ObjectNumberingType::Picture {
-        common.hwp5_gen_shape_attr_bit28 = true;
     }
 
     ids
@@ -5458,6 +5441,18 @@ fn parse_page_hiding_attrs(e: &quick_xml::events::BytesStart) -> PageHide {
     ph
 }
 
+/// [#8334] 셀 `textDirection` → HWP5 LIST_HEADER 텍스트 방향(bit 16~18).
+///
+/// 한컴 저장본 대응(k-water-rfp HWP·HWPX): HWP5 값 2 인 세로 셀 3개가 HWPX 에서
+/// `VERTICALALL`(세로 영문 세움) 3건이다. `VERTICAL` 은 종전대로 1 이다.
+fn cell_text_direction_from_hwpx(value: &str) -> u8 {
+    match value {
+        "VERTICAL" => 1,
+        "VERTICALALL" => 2,
+        _ => 0,
+    }
+}
+
 fn parse_page_num_attrs(e: &quick_xml::events::BytesStart) -> PageNumberPos {
     let mut pn = PageNumberPos::default();
     for attr in e.attributes().flatten() {
@@ -5493,9 +5488,15 @@ fn parse_page_num_attrs(e: &quick_xml::events::BytesStart) -> PageNumberPos {
                     _ => 0,
                 };
             }
+            // [#7633] 줄표(측면) 문자. 한/글은 `""`·공백·속성 없음을 줄표 없는 쪽 번호로,
+            // `"-"` 만 `- 1 -` 로 그린다. 빈 값을 `'-'` 로 채우면 줄표가 새로 생긴다.
             b"sideChar" => {
                 let s = attr_str(&attr);
-                pn.dash_char = s.chars().next().unwrap_or('-');
+                pn.dash_char = s
+                    .chars()
+                    .next()
+                    .filter(|c| !c.is_whitespace())
+                    .unwrap_or('\0');
             }
             _ => {}
         }
@@ -7501,11 +7502,9 @@ fn parse_hp_chart_element(
     use crate::model::shape::OleShape;
 
     let mut common = CommonObjAttr::default();
-    common.hwp5_gen_shape_attr_bit26 = true;
     let mut chart_num: u16 = 0;
     let mut chart_id_ref: Option<String> = None;
     let mut id_attr: u32 = 0;
-    let mut numbering_type_picture = false;
 
     for attr in e.attributes().flatten() {
         match attr.key.as_ref().as_bytes() {
@@ -7514,7 +7513,6 @@ fn parse_hp_chart_element(
             // 필드는 이것뿐이라, bool 지역 변수만으로는 저장 시 항상 NONE 으로
             // 되쓰인다(공용 도형 파서 section.rs:2892 와 동일 패턴으로 맞춤).
             b"numberingType" => {
-                numbering_type_picture = attr_str(&attr).eq_ignore_ascii_case("PICTURE");
                 common.numbering_type = match attr_str(&attr).to_ascii_uppercase().as_str() {
                     "PICTURE" => crate::model::shape::ObjectNumberingType::Picture,
                     "TABLE" => crate::model::shape::ObjectNumberingType::Table,
@@ -7578,9 +7576,6 @@ fn parse_hp_chart_element(
         &mut caption,
         &mut line_shape,
     )?;
-    if numbering_type_picture {
-        common.hwp5_gen_shape_attr_bit28 = true;
-    }
     common.attr = pack_hwpx_common_obj_attr(&common);
 
     if chart_num == 0 {
@@ -7622,9 +7617,7 @@ fn parse_hp_ole_element(
     use crate::model::shape::OleDrawingAspect;
 
     let mut common = CommonObjAttr::default();
-    common.hwp5_gen_shape_attr_bit26 = true;
     let mut bin_id: u32 = 0;
-    let mut numbering_type_picture = false;
     let mut draw_aspect = OleDrawingAspect::default();
     // [#4669] `id` 는 `instid` 와 별개 값이다(한컴 원산 실측). 종전에는 id arm 이
     // 없어(차트는 #3546 에서 받음) 재방출 id 가 "0" 또는 instid 로 되쓰였다.
@@ -7643,7 +7636,6 @@ fn parse_hp_ole_element(
             // 필드는 이것뿐이라, bool 지역 변수만으로는 저장 시 항상 NONE 으로
             // 되쓰인다(공용 도형 파서 section.rs:2892 와 동일 패턴으로 맞춤).
             b"numberingType" => {
-                numbering_type_picture = attr_str(&attr).eq_ignore_ascii_case("PICTURE");
                 common.numbering_type = match attr_str(&attr).to_ascii_uppercase().as_str() {
                     "PICTURE" => crate::model::shape::ObjectNumberingType::Picture,
                     "TABLE" => crate::model::shape::ObjectNumberingType::Table,
@@ -7723,9 +7715,6 @@ fn parse_hp_ole_element(
         &mut caption,
         &mut line_shape,
     )?;
-    if numbering_type_picture {
-        common.hwp5_gen_shape_attr_bit28 = true;
-    }
     common.attr = pack_hwpx_common_obj_attr(&common);
 
     let mut ole = OleShape::default();
@@ -9301,7 +9290,13 @@ mod tests {
             other => panic!("expected shape control, got {:?}", other),
         };
 
-        assert_eq!(line.common.attr, 0x044a_4700);
+        // `numberingType` 이 없으면 OWPML 기본값 `NONE` 이라 번호 범주 bit 26-27 은 0 이다
+        // (#8335). 한컴 exam_social 원본은 `PICTURE` 를 명시해 bit 26 이 켜진다.
+        assert_eq!(
+            line.common.numbering_type,
+            crate::model::shape::ObjectNumberingType::None
+        );
+        assert_eq!(line.common.attr, 0x004a_4700);
         assert_eq!(line.common.text_wrap, TextWrap::BehindText);
         assert_eq!(line.common.width_criterion, SizeCriterion::Absolute);
         assert_eq!(line.common.height_criterion, SizeCriterion::Absolute);
@@ -10063,10 +10058,9 @@ mod tests {
             panic!("expected rectangle shape");
         };
         assert_eq!(rect.round_rate, 50);
-        assert!(
-            rect.common.hwp5_gen_shape_attr_bit28,
-            "numberingType=PICTURE는 한컴 HWP5 공통 개체 bit 28로 저장돼야 한다"
-        );
+        // [#8339] bit 28 은 번호 범주가 아니라 HWP 저장 시점의 문서 설정이 정한다 —
+        // 파서는 세우지 않고 HWPX→HWP 어댑터가 정한다.
+        assert!(!rect.common.hwp5_gen_shape_attr_bit28);
     }
 
     #[test]

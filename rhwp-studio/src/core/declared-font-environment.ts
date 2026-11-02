@@ -23,10 +23,10 @@ interface LoadedProgram {
 const loadedPrograms = new Map<string, LoadedProgram>();
 const suppliedAliases = new Map<string, string>();
 
-/** 이미 승인·적재한 같은 family의 CFF 바이트만 조판 공급에 사용한다. */
-export function declaredOpenTypeProgram(family: string): Uint8Array | null {
+/** 이미 승인·적재한 같은 family의 실제 프로그램만 조판에 공급한다. */
+export function declaredOpenTypeProgram(family: string, sourceTtf = false): Uint8Array | null {
   const normalized = family.trim().toLocaleLowerCase();
-  const match = [...loadedPrograms.values()].find(program => program.openTypeCff
+  const match = [...loadedPrograms.values()].find(program => (sourceTtf ? program.trueType : program.openTypeCff)
     && (program.family.toLocaleLowerCase() === normalized || program.query.toLocaleLowerCase() === normalized));
   return match ? new Uint8Array(match.bytes) : null;
 }
