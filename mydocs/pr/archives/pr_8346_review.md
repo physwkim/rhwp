@@ -149,3 +149,7 @@ HWP3의 기존 ASCII 반각 계약과 실제 선택된 글꼴 프로그램의 �
 보존하도록 수정했다. 원본과 한컴 저장본의 글꼴 이름·유형 및 3쪽 첫 설명 줄과 이어지는
 줄의 시작선 관계를 확인하는 글꼴 비의존 회귀를 추가했다. 설정을 강제했던 앞의 진단 수치는
 실제 코드 수정 후 결과가 아니므로 별도로 새 Native와 fresh WASM을 실행한다.
+
+## Merge 후 contributor PR comment 계획
+
+[통합 PR #8438](https://github.com/edwardkim/rhwp/pull/8438), merge `b8338ba38be288b6e9385f5372d184649323aa9f`와 [코드 head CI](https://github.com/edwardkim/rhwp/actions/runs/41322587728)를 연결한다. 암호 HWP3 원본 17쪽에서 Native 99.25%, fresh WASM 99.26%를 확인했다. 개요 번호와 글꼴 이름 경로를 추가 보정했다. [17쪽 overlay](../assets/planet6897_integration_final/pr8346/native-hwp3-p017-overlay.png)를 사용한다. 감사와 원 기여, 메인터너 보정 범위를 존댓말로 설명하고 게시 뒤 API로 확인한다.

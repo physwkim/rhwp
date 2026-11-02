@@ -156,3 +156,7 @@ face를 확인했다. 독립 Print의 내장 이름 `ExpoM-HM`과 일치하며, 
 이는 선택 쪽의 결과이며 전쪽과 fresh WASM 최종 검증을 대신하지 않는다.
 저장소 시험 TTF와 TTC 3개 face의 전 유니코드 문자 매핑·전진폭 보존, 64MiB 제한
 경계 및 기존 공백 글꼴 계약은 최소 글꼴 환경에서 3건 모두 통과했다.
+
+## Merge 후 contributor PR comment 계획
+
+[통합 PR #8438](https://github.com/edwardkim/rhwp/pull/8438), merge `b8338ba38be288b6e9385f5372d184649323aa9f`와 [코드 head CI](https://github.com/edwardkim/rhwp/actions/runs/41322587728)를 연결한다. 113424의 5쪽에서 Native/fresh WASM 각각 99.94%를 확인했다. 표 뒤 문단과 글꼴 메트릭에 추가 보정이 필요했다. [5쪽 overlay](../assets/planet6897_integration_final/pr8161/native-113424-p005-overlay.png)를 사용한다. 감사와 원 기여, 메인터너 보정 범위를 존댓말로 설명하고 게시 뒤 API로 확인한다.
