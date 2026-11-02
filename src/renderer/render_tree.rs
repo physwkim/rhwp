@@ -241,7 +241,10 @@ pub enum ControlCode {
 }
 
 impl RenderNode {
-    pub fn new(id: NodeId, node_type: RenderNodeType, bbox: BoundingBox) -> Self {
+    pub fn new(id: NodeId, mut node_type: RenderNodeType, bbox: BoundingBox) -> Self {
+        if let RenderNodeType::Image(image) = &mut node_type {
+            super::image_geometry::normalize_gif_crop(image);
+        }
         Self {
             cell_frame_paint: false,
             print_table_column_axes: None,

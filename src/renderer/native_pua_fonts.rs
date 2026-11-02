@@ -1,6 +1,8 @@
 //! 실제 paint 공급자가 준비한 SFNT에서만 원 PUA 표시와 전진폭을 선택한다.
 //! 폰트 bytes와 윤곽은 보관하지 않으며, 문서 IR의 family와 문자도 변경하지 않는다.
 
+mod metric_sfnt;
+
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
@@ -52,7 +54,8 @@ pub struct NativePuaMetrics {
 #[derive(Debug)]
 pub struct NativeOtfMetrics {
     programs: Vec<NativeOtfProgram>,
-    advances: std::sync::Mutex<BTreeMap<char, Option<(f64, bool)>>>,
+    advances: std::sync::Mutex<BTreeMap<char, Option<(f64, bool, bool)>>>,
+    ttf_advances: std::sync::Mutex<BTreeMap<char, Option<f64>>>,
     coverage: std::sync::Mutex<BTreeMap<char, bool>>,
 }
 
@@ -63,6 +66,7 @@ struct NativeOtfProgram {
     digest: [u8; 32],
     faux_bold: bool,
     cff: bool,
+    verified_hft_bold_tracking: bool,
 }
 
 impl PartialEq for NativeOtfMetrics {
@@ -75,6 +79,32 @@ impl PartialEq for NativeOtfMetrics {
 }
 
 impl NativeOtfMetrics {
+    /// 첫 글리프 공급자가 TrueType일 때 그 프로그램의 자연 전진을 읽는다.
+    /// 원본 폭이 확인되지 않은 명시적 TrueType 슬롯에서만 호출한다.
+    pub fn source_ttf_advance_em(&self, character: char) -> Option<f64> {
+        let mut cache = self.ttf_advances.lock().ok()?;
+        if let Some(advance) = cache.get(&character) {
+            return *advance;
+        }
+        let mut value = None;
+        for program in &self.programs {
+            let Ok(face) = ttf_parser::Face::parse(&program.bytes, program.face_index) else {
+                continue;
+            };
+            let Some(glyph) = face.glyph_index(character).filter(|id| id.0 != 0) else {
+                continue;
+            };
+            if !program.cff {
+                value = face
+                    .glyph_hor_advance(glyph)
+                    .map(|width| f64::from(width) / f64::from(face.units_per_em()));
+            }
+            break;
+        }
+        cache.insert(character, value);
+        value
+    }
+
     /// 글리프 공급 여부는 CFF 전진 사용 여부와 다르다. TTF도 표시할 수 있다.
     pub fn has_glyph(&self, character: char) -> bool {
         let Ok(mut cache) = self.coverage.lock() else {
@@ -94,12 +124,18 @@ impl NativeOtfMetrics {
     }
 
     pub fn needs_faux_bold(&self, character: char) -> bool {
-        self.glyph_metric(character).is_some_and(|(_, faux)| faux)
+        self.glyph_metric(character)
+            .is_some_and(|(_, faux, _)| faux)
     }
     pub fn advance_em(&self, character: char) -> Option<f64> {
-        self.glyph_metric(character).map(|(advance, _)| advance)
+        self.glyph_metric(character).map(|(advance, _, _)| advance)
     }
-    fn glyph_metric(&self, character: char) -> Option<(f64, bool)> {
+    /// 실제 글리프 공급 프로그램이 독립 Print로 확인된 HFT 계약을 소유하는가.
+    pub fn has_verified_hft_bold_tracking(&self, character: char) -> bool {
+        self.glyph_metric(character)
+            .is_some_and(|(_, _, verified)| verified)
+    }
+    fn glyph_metric(&self, character: char) -> Option<(f64, bool, bool)> {
         let mut cache = self.advances.lock().ok()?;
         if let Some(advance) = cache.get(&character) {
             return *advance;
@@ -119,6 +155,7 @@ impl NativeOtfMetrics {
                     (
                         f64::from(width) / f64::from(face.units_per_em()),
                         program.faux_bold,
+                        program.verified_hft_bold_tracking,
                     )
                 });
             }
@@ -145,9 +182,9 @@ struct LiteralSpaceMetric {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NativePuaFonts {
-    programs: BTreeMap<String, BTreeMap<(bool, bool), Arc<NativePuaMetrics>>>,
-    literal_spaces: BTreeMap<String, BTreeMap<(bool, bool), LiteralSpaceMetric>>,
-    otf_programs: BTreeMap<String, BTreeMap<(bool, bool), Arc<NativeOtfMetrics>>>,
+    programs: BTreeMap<String, BTreeMap<(bool, bool, Option<bool>), Arc<NativePuaMetrics>>>,
+    literal_spaces: BTreeMap<String, BTreeMap<(bool, bool, Option<bool>), LiteralSpaceMetric>>,
+    otf_programs: BTreeMap<String, BTreeMap<(bool, bool, bool), Arc<NativeOtfMetrics>>>,
 }
 
 impl NativePuaFonts {
@@ -159,6 +196,18 @@ impl NativePuaFonts {
         family: &str,
         bold: bool,
         italic: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<(), &'static str> {
+        self.register_otf_for_source(family, bold, italic, false, bytes, face_index)
+    }
+
+    pub fn register_otf_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
         bytes: &[u8],
         face_index: u32,
     ) -> Result<(), &'static str> {
@@ -174,11 +223,28 @@ impl NativePuaFonts {
         }
         let face =
             ttf_parser::Face::parse(bytes, face_index).map_err(|_| "invalid native font face")?;
+        let cff = is_cff_program(bytes, face_index);
+        let faux_bold = bold && !face.is_bold();
+        let verified_hft_bold_tracking = face.names().into_iter().any(|name| {
+            matches!(
+                name.name_id,
+                ttf_parser::name_id::FAMILY | ttf_parser::name_id::TYPOGRAPHIC_FAMILY
+            ) && name.to_string().is_some_and(|family| {
+                matches!(family.trim(), "신명 중고딕" | "Sinmyeong Junggothic")
+            })
+        });
+        let compact = (!cff)
+            .then(|| metric_sfnt::compact_truetype_metrics(bytes, face_index))
+            .flatten();
+        let (bytes, face_index) = match compact.as_deref() {
+            Some(metrics) => (metrics, 0),
+            None => (bytes, face_index),
+        };
         let digest: [u8; 32] = Sha256::digest(bytes).into();
         let old = self
             .otf_programs
             .get(family)
-            .and_then(|v| v.get(&(bold, italic)));
+            .and_then(|v| v.get(&(bold, italic, source_ttf)));
         if old.is_some_and(|font| {
             font.programs
                 .iter()
@@ -219,17 +285,19 @@ impl NativePuaFonts {
             bytes: shared.unwrap_or_else(|| Arc::from(bytes)),
             face_index,
             digest,
-            faux_bold: bold && !face.is_bold(),
-            cff: is_cff_program(bytes, face_index),
+            faux_bold,
+            cff,
+            verified_hft_bold_tracking,
         });
         self.otf_programs
             .entry(family.to_owned())
             .or_default()
             .insert(
-                (bold, italic),
+                (bold, italic, source_ttf),
                 Arc::new(NativeOtfMetrics {
                     programs,
                     advances: Default::default(),
+                    ttf_advances: Default::default(),
                     coverage: Default::default(),
                 }),
             );
@@ -237,7 +305,20 @@ impl NativePuaFonts {
     }
 
     pub fn get_otf(&self, family: &str, bold: bool, italic: bool) -> Option<Arc<NativeOtfMetrics>> {
-        self.otf_programs.get(family)?.get(&(bold, italic)).cloned()
+        self.get_otf_for_source(family, bold, italic, false)
+    }
+
+    pub fn get_otf_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> Option<Arc<NativeOtfMetrics>> {
+        self.otf_programs
+            .get(family)?
+            .get(&(bold, italic, source_ttf))
+            .cloned()
     }
 
     /// 실제 표시 face의 선택은 공급자의 책임이다. 이름만으로 호출하지 않는다.
@@ -247,6 +328,31 @@ impl NativePuaFonts {
         family: &str,
         bold: bool,
         italic: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
+        self.register_with_source(family, bold, italic, None, bytes, face_index)
+    }
+
+    /// 같은 family의 TTF와 HFT 슬롯은 서로 다른 실제 프로그램을 소유할 수 있다.
+    pub fn register_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
+        self.register_with_source(family, bold, italic, Some(source_ttf), bytes, face_index)
+    }
+
+    fn register_with_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: Option<bool>,
         bytes: &[u8],
         face_index: u32,
     ) -> Result<bool, &'static str> {
@@ -267,7 +373,7 @@ impl NativePuaFonts {
             let removed = self
                 .programs
                 .get_mut(family)
-                .is_some_and(|programs| programs.remove(&(bold, italic)).is_some());
+                .is_some_and(|programs| programs.remove(&(bold, italic, source_ttf)).is_some());
             if self.programs.get(family).is_some_and(BTreeMap::is_empty) {
                 self.programs.remove(family);
             }
@@ -278,13 +384,14 @@ impl NativePuaFonts {
             face_index,
             advances,
         };
-        if self
-            .get(family, bold, italic)
-            .is_some_and(|old| *old == metric)
-        {
+        let existing = self
+            .programs
+            .get(family)
+            .and_then(|entries| entries.get(&(bold, italic, source_ttf)));
+        if existing.is_some_and(|old| **old == metric) {
             return Ok(false);
         }
-        if self.get(family, bold, italic).is_none()
+        if existing.is_none()
             && self.programs.values().map(BTreeMap::len).sum::<usize>() >= MAX_PROGRAMS
         {
             return Err("native PUA font program limit exceeded");
@@ -292,7 +399,7 @@ impl NativePuaFonts {
         self.programs
             .entry(family.to_owned())
             .or_default()
-            .insert((bold, italic), Arc::new(metric));
+            .insert((bold, italic, source_ttf), Arc::new(metric));
         Ok(true)
     }
 
@@ -302,6 +409,37 @@ impl NativePuaFonts {
         family: &str,
         bold: bool,
         italic: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
+        self.register_literal_space_with_source(family, bold, italic, None, bytes, face_index)
+    }
+
+    pub fn register_literal_space_for_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, &'static str> {
+        self.register_literal_space_with_source(
+            family,
+            bold,
+            italic,
+            Some(source_ttf),
+            bytes,
+            face_index,
+        )
+    }
+
+    fn register_literal_space_with_source(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: Option<bool>,
         bytes: &[u8],
         face_index: u32,
     ) -> Result<bool, &'static str> {
@@ -324,7 +462,7 @@ impl NativePuaFonts {
             let removed = self
                 .literal_spaces
                 .get_mut(family)
-                .is_some_and(|entries| entries.remove(&(bold, italic)).is_some());
+                .is_some_and(|entries| entries.remove(&(bold, italic, source_ttf)).is_some());
             if self
                 .literal_spaces
                 .get(family)
@@ -342,7 +480,7 @@ impl NativePuaFonts {
         let existing = self
             .literal_spaces
             .get(family)
-            .and_then(|entries| entries.get(&(bold, italic)));
+            .and_then(|entries| entries.get(&(bold, italic, source_ttf)));
         if existing == Some(&metric) {
             return Ok(false);
         }
@@ -359,7 +497,7 @@ impl NativePuaFonts {
         self.literal_spaces
             .entry(family.to_owned())
             .or_default()
-            .insert((bold, italic), metric);
+            .insert((bold, italic, source_ttf), metric);
         Ok(true)
     }
 
@@ -367,12 +505,69 @@ impl NativePuaFonts {
         Some(
             self.literal_spaces
                 .get(family)?
-                .get(&(bold, italic))?
+                .get(&(bold, italic, None))?
                 .advance_em,
         )
     }
 
+    pub fn literal_space_em_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> Option<f64> {
+        Some(
+            self.literal_spaces
+                .get(family)?
+                .get(&(bold, italic, Some(source_ttf)))
+                .or_else(|| self.literal_spaces.get(family)?.get(&(bold, italic, None)))?
+                .advance_em,
+        )
+    }
+
+    pub fn has_literal_space_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> bool {
+        self.literal_spaces
+            .get(family)
+            .is_some_and(|programs| programs.contains_key(&(bold, italic, Some(source_ttf))))
+    }
+
     pub fn get(&self, family: &str, bold: bool, italic: bool) -> Option<Arc<NativePuaMetrics>> {
-        self.programs.get(family)?.get(&(bold, italic)).cloned()
+        self.programs
+            .get(family)?
+            .get(&(bold, italic, None))
+            .cloned()
+    }
+
+    pub fn get_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> Option<Arc<NativePuaMetrics>> {
+        self.programs
+            .get(family)?
+            .get(&(bold, italic, Some(source_ttf)))
+            .or_else(|| self.programs.get(family)?.get(&(bold, italic, None)))
+            .cloned()
+    }
+
+    pub fn has_program_for_source(
+        &self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        source_ttf: bool,
+    ) -> bool {
+        self.programs
+            .get(family)
+            .is_some_and(|programs| programs.contains_key(&(bold, italic, Some(source_ttf))))
     }
 }

@@ -1,9 +1,72 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {selectMetafileFontFaces, selectTextEffectFontFaces} from '../visual-sweep-font-registration.mjs';
+import {selectMetafileFontFaces, selectSweepPaintFontFaces, selectTextEffectFontFaces} from '../visual-sweep-font-registration.mjs';
 const font = (weight, style = 'normal', family = 'Face') => ({families: [family], weight, style});
 const request = (weight, italic = false, families = ['Face']) => ({families, weight, italic});
 const pick = (fonts, requests) => [...selectMetafileFontFaces(fonts, requests)].sort();
+test('메타파일과 그림자가 실제 사용하는 글리프를 공급한 뒤 나머지 fallback은 등록하지 않는다', async () => {
+  const fonts = ['First', 'Second', 'Unused', 'Shadow'].map(name => font(400, 'normal', name));
+  const reads = [];
+  const selected = await selectSweepPaintFontFaces({fontMissingText(bytes, index, text) {
+    assert.equal(index, 0);
+    return text.replaceAll(String.fromCharCode(bytes[0]), '');
+  }}, fonts, [{...request(400, false, ['First', 'Second', 'Unused']), text: 'AB'}],
+  [{...request(400, false, ['Shadow', 'Unused']), text: 'C'}], async record => {
+    const family = record.families[0]; reads.push(family);
+    return Uint8Array.of({First: 65, Second: 66, Unused: 88, Shadow: 67}[family]);
+  });
+  assert.deepEqual([...selected], ['first|400|normal', 'second|400|normal', 'shadow|400|normal']);
+  assert.deepEqual(reads, ['First', 'Second', 'Shadow']);
+});
+test('같은 family의 분할 face가 다른 글리프를 공급하면 두 face를 확인한다', async () => {
+  const fonts = [
+    {...font(400), openTypeCff: true, id: 'latin'},
+    {...font(400), openTypeCff: true, id: 'hangul'},
+    {...font(400, 'normal', 'Fallback'), id: 'fallback'},
+  ];
+  const reads = [];
+  const selected = await selectSweepPaintFontFaces({fontMissingText(bytes, index, text) {
+    assert.equal(index, 0);
+    return text.replaceAll(bytes[0] === 1 ? 'A' : '가', '');
+  }}, fonts, [{...request(400, false, ['Face', 'Fallback']), text: 'A가'}], [], async record => {
+    reads.push(record.id);
+    return Uint8Array.of(record.id === 'latin' ? 1 : 2);
+  });
+  assert.deepEqual([...selected], ['face|400|normal']);
+  assert.deepEqual(reads, ['latin', 'hangul']);
+});
+test('공급하지 않는 두 번째 TTF가 아니라 실제 fallback을 검사한다', async () => {
+  const fonts = [
+    {...font(400), id: 'first'},
+    {...font(400), id: 'second'},
+    {...font(400, 'normal', 'Fallback'), id: 'fallback'},
+  ];
+  const reads = [];
+  const selected = await selectSweepPaintFontFaces({fontMissingText(bytes, index, text) {
+    assert.equal(index, 0);
+    return bytes[0] === 1 ? text : '';
+  }}, fonts, [{...request(400, false, ['Face', 'Fallback']), text: 'A'}], [], async record => {
+    reads.push(record.id);
+    return Uint8Array.of(record.id === 'first' ? 1 : 2);
+  });
+  assert.deepEqual([...selected], ['fallback|400|normal']);
+  assert.deepEqual(reads, ['first', 'fallback']);
+});
+test('cmap에 있지만 Canvas에서 제외된 빈 기호는 다음 글꼴에 넘긴다', async () => {
+  const fonts = [font(400), font(400, 'normal', 'Fallback')];
+  const reads = [];
+  const selected = await selectSweepPaintFontFaces({
+    fontMissingText: () => '',
+    getFontSymbolUnicodeRange(bytes) {
+      return bytes[0] === 1 ? 'U+0-26A9,U+26AB-10FFFF' : '';
+    },
+  }, fonts, [{...request(400, false, ['Face', 'Fallback']), text: '⚪'}], [], async record => {
+    reads.push(record.families[0]);
+    return Uint8Array.of(record.families[0] === 'Face' ? 1 : 2);
+  });
+  assert.deepEqual([...selected], ['fallback|400|normal']);
+  assert.deepEqual(reads, ['Face', 'Fallback']);
+});
 test('요청하지 않은 100·200·300·500·600·800·900은 paint에 복제하지 않는다', () => {
   assert.deepEqual(pick([100,200,300,400,500,600,700,800,900].map(w => font(w)), [request(400),request(700)]), ['face|400|normal','face|700|normal']);
 });

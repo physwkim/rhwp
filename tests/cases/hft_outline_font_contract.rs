@@ -392,6 +392,60 @@ mod native {
     use rhwp::renderer::skia::SkiaLayerRenderer;
     use rhwp::renderer::TextStyle;
 
+    // 독립 MIT fixture의 이름 레코드만 바꿔 기본 이름은 다르지만
+    // 현지화된 family 이름은 같은 분할 face를 만든다.
+    fn localized_alias_cff(mut bytes: Vec<u8>, suffix: u8) -> Vec<u8> {
+        let table_count = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+        let name_entry = (0..table_count)
+            .map(|index| 12 + index * 16)
+            .find(|&pos| &bytes[pos..pos + 4] == b"name")
+            .unwrap();
+        let name =
+            u32::from_be_bytes(bytes[name_entry + 8..name_entry + 12].try_into().unwrap()) as usize;
+        let count = u16::from_be_bytes([bytes[name + 2], bytes[name + 3]]) as usize;
+        let strings = name + u16::from_be_bytes([bytes[name + 4], bytes[name + 5]]) as usize;
+        for index in 0..count {
+            let record = name + 6 + index * 12;
+            let platform = u16::from_be_bytes([bytes[record], bytes[record + 1]]);
+            let language = u16::from_be_bytes([bytes[record + 4], bytes[record + 5]]);
+            let name_id = u16::from_be_bytes([bytes[record + 6], bytes[record + 7]]);
+            if name_id != 1 {
+                continue;
+            }
+            if platform == 1 {
+                let length = u16::from_be_bytes([bytes[record + 8], bytes[record + 9]]) as usize;
+                let offset = u16::from_be_bytes([bytes[record + 10], bytes[record + 11]]) as usize;
+                assert_eq!(length, FAMILY.len());
+                bytes[strings + offset + length - 1] = suffix;
+            } else if platform == 3 && language == 0x0409 {
+                bytes[record + 4..record + 6].copy_from_slice(&0x0412u16.to_be_bytes());
+            }
+        }
+        bytes
+    }
+
+    fn replace_windows_family_suffix(mut bytes: Vec<u8>, suffix: u8) -> Vec<u8> {
+        let count = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+        let entry = (0..count)
+            .map(|index| 12 + index * 16)
+            .find(|&pos| &bytes[pos..pos + 4] == b"name")
+            .unwrap();
+        let table = u32::from_be_bytes(bytes[entry + 8..entry + 12].try_into().unwrap()) as usize;
+        let records = u16::from_be_bytes([bytes[table + 2], bytes[table + 3]]) as usize;
+        let strings = table + u16::from_be_bytes([bytes[table + 4], bytes[table + 5]]) as usize;
+        for index in 0..records {
+            let record = table + 6 + index * 12;
+            let platform = u16::from_be_bytes([bytes[record], bytes[record + 1]]);
+            let name_id = u16::from_be_bytes([bytes[record + 6], bytes[record + 7]]);
+            if platform == 3 && name_id == 1 {
+                let length = u16::from_be_bytes([bytes[record + 8], bytes[record + 9]]) as usize;
+                let offset = u16::from_be_bytes([bytes[record + 10], bytes[record + 11]]) as usize;
+                bytes[strings + offset + length - 1] = suffix;
+            }
+        }
+        bytes
+    }
+
     fn paint(y: f64, hft: bool, profile: RenderProfile) -> RasterPixels {
         let run = TextRunNode {
             text: "가".into(),
@@ -552,6 +606,144 @@ mod native {
         assert!(
             first < quarter && quarter < whole,
             "선택된 두 번째 CFF도 소수 원점 이동을 보존해야 한다: {first}, {quarter}, {whole}"
+        );
+    }
+
+    #[test]
+    fn localized_split_family_keeps_selected_hft_outline_origin_in_2022_print() {
+        let first = localized_alias_cff(CFF.to_vec(), b'1');
+        let second = localized_alias_cff(synthetic_cff_for('나'), b'2');
+        let renderer = SkiaLayerRenderer::new()
+            .try_with_font_data(&[first, second])
+            .unwrap();
+        let mut core =
+            DocumentCore::from_bytes(include_bytes!("../../saved/blank2010.hwp")).unwrap();
+        core.set_hangul2024_compat(false);
+        let reference = core
+            .build_page_layer_tree_with_profile(0, RenderProfile::Print)
+            .unwrap();
+        assert!(!reference.preserves_raster_text_geometry());
+        let paint_at = |y| {
+            let run = TextRunNode {
+                text: "나".into(),
+                style: TextStyle {
+                    font_family: FAMILY.into(),
+                    font_size: 32.0,
+                    source_font_is_hft: true,
+                    ..Default::default()
+                },
+                char_shape_id: None,
+                para_shape_id: None,
+                section_index: None,
+                para_index: None,
+                char_start: None,
+                cell_context: None,
+                is_para_end: false,
+                is_line_break_end: false,
+                rotation: 0.0,
+                is_vertical: false,
+                char_overlap: None,
+                border_fill_id: 0,
+                baseline: 32.0,
+                field_marker: Default::default(),
+                layout_positions: None,
+                display_text: None,
+            };
+            let mut tree = PageLayerTree::with_profile(
+                64.0,
+                64.0,
+                LayerNode::leaf(
+                    BoundingBox::new(0.0, 0.0, 64.0, 64.0),
+                    None,
+                    vec![PaintOp::text_run(BoundingBox::new(8.0, y, 40.0, 40.0), run)],
+                ),
+                RenderProfile::Print,
+            );
+            tree.resources = reference.resources.clone();
+            center(
+                &renderer
+                    .render_pixels_with_options(&tree, RasterRenderOptions::default())
+                    .unwrap(),
+            )
+        };
+        let original = paint_at(4.1);
+        let quarter = paint_at(4.35);
+        let whole = paint_at(5.1);
+        assert!(
+            (quarter - original - 0.25).abs() <= 0.08,
+            "같은 family의 선택된 face는 소수 원점을 보존한다: {original}, {quarter}"
+        );
+        assert!((whole - original - 1.0).abs() <= 0.02);
+    }
+
+    #[test]
+    fn unrelated_fallback_does_not_inherit_original_hft_outline_policy() {
+        let first = localized_alias_cff(CFF.to_vec(), b'1');
+        let second =
+            replace_windows_family_suffix(localized_alias_cff(synthetic_cff_for('나'), b'2'), b'2');
+        let renderer = SkiaLayerRenderer::new()
+            .try_with_font_data(&[first, second])
+            .unwrap();
+        let mut core =
+            DocumentCore::from_bytes(include_bytes!("../../saved/blank2010.hwp")).unwrap();
+        core.set_hangul2024_compat(false);
+        let reference = core
+            .build_page_layer_tree_with_profile(0, RenderProfile::Print)
+            .unwrap();
+        assert!(!reference.preserves_raster_text_geometry());
+        let paint = |hft| {
+            let run = TextRunNode {
+                text: "나".into(),
+                style: TextStyle {
+                    font_family: format!("{FAMILY},RHWP HFT Outline Fixtur2"),
+                    font_size: 32.0,
+                    source_font_is_hft: hft,
+                    ..Default::default()
+                },
+                char_shape_id: None,
+                para_shape_id: None,
+                section_index: None,
+                para_index: None,
+                char_start: None,
+                cell_context: None,
+                is_para_end: false,
+                is_line_break_end: false,
+                rotation: 0.0,
+                is_vertical: false,
+                char_overlap: None,
+                border_fill_id: 0,
+                baseline: 32.0,
+                field_marker: Default::default(),
+                layout_positions: None,
+                display_text: None,
+            };
+            let mut tree = PageLayerTree::with_profile(
+                64.0,
+                64.0,
+                LayerNode::leaf(
+                    BoundingBox::new(0.0, 0.0, 64.0, 64.0),
+                    None,
+                    vec![PaintOp::text_run(
+                        BoundingBox::new(8.0, 4.35, 40.0, 40.0),
+                        run,
+                    )],
+                ),
+                RenderProfile::Print,
+            );
+            tree.resources = reference.resources.clone();
+            renderer
+                .render_pixels_with_options(&tree, RasterRenderOptions::default())
+                .unwrap()
+        };
+        let hft = paint(true);
+        assert_eq!(
+            hft,
+            paint(false),
+            "다른 family의 글꼴은 원래 래스터 경로를 유지한다"
+        );
+        assert!(
+            center(&hft).is_finite(),
+            "대체 글리프가 실제로 표시되어야 한다"
         );
     }
 }

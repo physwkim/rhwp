@@ -1,0 +1,49 @@
+# PR #8402 리뷰 — fix(layout): 저장 줄 없는 문단의 어울림 그림·도형이 자기 문단과 뒤 문단의 줄을 한/글처럼 줄인다 (#8282)
+
+## 최종 판정
+
+**머지 보류 — 재체리픽 후보의 검증 진행 중.** 최신 base의 기능 보존, 관련 검증과 기존 정밀 TSV 하락 해소를 완료한 뒤 다시 판정한다.
+
+## 접수와 적용
+
+- 원 PR: [#8402](https://github.com/edwardkim/rhwp/pull/8402), 작성자 `planet6897`, reviewer `jangster77`.
+- 원 PR head 조회값: `1990cf5db31d8ecf7ea512000076c5c119e8aa64`. 조회 시 원 PR head와 마지막 체리픽 원본이 일치한다.
+- 마지막 적용 원본: `1990cf5db31d8ecf7ea512000076c5c119e8aa64`. 검증 시작 당시 코드 후보: `abea5b028f8f135bdf000ca700e1993ebf0b1973`, 기준 `upstream/devel`: `bc9dfdd057258de59afebeb5121c4bee7398e07f`.
+- 관련 이슈: [#8282](https://github.com/edwardkim/rhwp/issues/8282).
+- 선행 PR: 별도 누적 선행 PR이 명시되지 않았다.
+
+후속 `e1f03ffbb3`은 Python 테스트 준비, `af175315e7`과 `e920cba6b0`은 회귀 검사 주석, `a63bb719de`는 검증 경과를 기록했다. `5d1294811b`은 전체 그림의 잘림 오판을 보정했다. `e1b8ab0f54`, `d6fe30c3ad`, `0897582f6c`, `8c4eca265e`에 Native 진단, #8410 집중 6건 통과와 글꼴 대조를 기록했으며 새 코드의 전쪽 출력 검증이 필요하다.
+
+## 변경 주장과 검토 관점
+
+저장 줄 없는 문단에서 어울림 그림·도형의 바깥 상자로 호스트와 후속 줄을 나눈다.
+자기 문단·뒤 문단, 기존 저장 줄과 그림/도형 대조군의 공통 소유를 확인한다.
+
+## 체리픽과 보정
+
+- 원본 `2ba2e962ef3bac72d779edcf5bef188ed312ad2f` → 통합 `f55d72464d15e5fc3323b32ae6e597ff52c7569d`.
+- 원본 `625e9ab96051b1711224c556e2d0cfa20faa5bc0` → 통합 `f2f12adfdfb8828c4242ae13dd92ecb82348331d`.
+- 원본 `b2069a86561974d775e3b3aebbdfa434402a284c` → 통합 `0e61cbf5095f7374a22abf5ad70304fa7f5035f1`.
+- 원본 `1990cf5db31d8ecf7ea512000076c5c119e8aa64` → 통합 `a32b78567da679c850d55687f1863d4d1cebd3b8`.
+
+이 PR의 원본 커밋 적용 중 별도로 기록된 충돌은 없다.
+
+기존 통합의 메인터너 보정 `3401b50256`을 새 후보의 `0e4bd3678e`로 다시 적용했다. 앞뒤 개체 여백 중복과 스크립트 압축 상태 복구는 해당 코드 경로별로 재검증한다.
+
+## 검증과 증거
+
+이전 통합 후보의 최소 글꼴 전체 회귀 로그에서 이 PR 관련 다음 모듈의 실행을 확인했다. 새 base 후보의 재실행 결과는 이 값으로 대신하지 않는다.
+- [`issue_8282_hwpx_reopen_tac_picture_square.rs`](../../../tests/cases/issue_8282_hwpx_reopen_tac_picture_square.rs): 이전 실행 8건 통과, 0건 실패, 0건 건너뜀.
+
+검토 후보에 포함된 입력 바이트를 Git blob과 대조했다. 아래 자료는 원 PR의 제출 증거이며 새 후보의 실행 결과를 뜻하지 않는다.
+- [`tac_picture_square_picture_overlap-2020.pdf`](../../../pdf/issue8282/tac_picture_square_picture_overlap-2020.pdf) — SHA-256 `2ff48072e4f122e266d552396699b692f24a9d01e6a95e312ede1dcbbcd3fb9e`.
+- [`tac_picture_square_textbox-2020.pdf`](../../../pdf/issue8282/tac_picture_square_textbox-2020.pdf) — SHA-256 `b0cb291e344891951cb95a1643974059203525c04ad19bd110e2f5a792776346`.
+- [`tac_picture_square_textbox_left_overlap-2020.pdf`](../../../pdf/issue8282/tac_picture_square_textbox_left_overlap-2020.pdf) — SHA-256 `bfee35fd2b2a1579537442fb30a12236c094ab9b0dd5a12ef48fb66de514120a`.
+
+기여자가 제출한 기준 자료: [`picture_overlap_silhouette.tsv`](../../../mydocs/pr/assets/issue_8282/base/native/picture_overlap_silhouette.tsv). 해당 자료만으로 새 통합 후보의 시각 검증을 통과 처리하지 않는다.
+
+기존 생성 목록으로 최소 글꼴 회귀 12,320건 통과·45건 건너뜀을 확인했다. 생성 목록에서 누락된 #8410 두 모듈의 6건을 목록 재작성 후 같은 환경에서 별도로 실행해 모두 통과했다. 두 실행을 구분하며 한 번의 전체 실행으로 기록하지 않는다.
+
+2026-11-01 고정 후보의 #8389·#8397 전쪽 정밀 대조에서 2,153행 중 Native 12행, WASM 8행이 공개 기준보다 낮았다. 이 수치는 이후 GIF·Canvas 보정 전 결과이며 최종 후보의 재검증 결과가 아니다. #7905 3쪽은 GIF 오른쪽 경계 누락, sample16 35쪽 WASM은 메타파일 내부의 미대응 3픽셀이 확인됐다. #8040 두 원본은 Native·WASM 전쪽이 90% 이상이나 Native 정밀 기준 하락이 남는다. 진행과 근거는 [작업 기록](../../working/task_m100_planet6897_system_fonts_20261031.md)을 따른다. 하락 보정과 전쪽 대조, 각 PR의 독립 Print·Native/fresh WASM 및 직접 판독을 완료해야 한다. #8410·#8412의 새 base 기능도 별도로 보존 검증한다.
+
+원 PR의 최신 head·required check와 통합 후보의 새 검증 결과를 확인하기 전에는 승인이나 merge를 진행하지 않는다.

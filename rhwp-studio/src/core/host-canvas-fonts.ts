@@ -188,7 +188,9 @@ export class HostCanvasFontSession {
     const intrinsic = families[0] ? intrinsicCanvasSourceFamily(families[0]) : null;
     const prepared: string[] = [];
     for (const [index, family] of families.entries()) {
-      const requested = index === 0 ? intrinsic ?? family : family;
+      const ttfPrefix = '__rhwp_ttf__';
+      const sourceTtf = family.startsWith(ttfPrefix);
+      const requested = sourceTtf ? family.slice(ttfPrefix.length) : index === 0 ? intrinsic ?? family : family;
       let records = resolveRendererLocalFontCandidates(requested,
         { weight: index === 0 && intrinsic ? 400 : weight, slant });
       if (!records.length && weight >= 600) {
@@ -198,12 +200,14 @@ export class HostCanvasFontSession {
       // 부분 준비 시 표시와 측정의 후보가 달라진다. 다 준비되면 CFF를
       // TTF보다 먼저 조회하고 각 형식 안에서는 호스트 순서를 보존한다.
       if (records.length > 1 && loadedFaces.some(face => !face)) continue;
-      if (records.length > 1 && !loadedFaces.some(face => face && face.bytes.byteLength >= 4
+      if (!sourceTtf && records.length > 1 && !loadedFaces.some(face => face && face.bytes.byteLength >= 4
         && new DataView(face.bytes).getUint32(0) === 0x4f54544f)) continue;
       loadedFaces.sort((a, b) => {
         const cff = (face: CanvasHostFace | null | undefined) => face && face.bytes.byteLength >= 4
           && new DataView(face.bytes).getUint32(0) === 0x4f54544f;
-        return Number(Boolean(cff(b))) - Number(Boolean(cff(a)));
+        return sourceTtf
+          ? Number(Boolean(cff(a))) - Number(Boolean(cff(b)))
+          : Number(Boolean(cff(b))) - Number(Boolean(cff(a)));
       });
       for (const loaded of loadedFaces) {
         if (!loaded) continue;

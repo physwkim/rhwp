@@ -13,7 +13,8 @@ use crate::renderer::{boxed_pua_char_overlap_semantics, clamp_tab_leader_end_x, 
 use super::font_catalog::TypefaceCatalog;
 use super::font_lookup::{
     font_style_for_text, match_supplied_family, match_system_family_style,
-    select_typeface_for_character, text_typeface_candidates, SystemFontFamilies,
+    select_typeface_for_character, text_typeface_candidates, text_typeface_candidates_for_source,
+    typeface_declares_family, SystemFontFamilies,
 };
 use super::renderer::colorref_to_skia;
 use super::synthetic_typeface::{draw_synthetic_bold_paths, unemboldened_typeface};
@@ -81,13 +82,14 @@ impl SkiaTextReplay<'_> {
                 //
                 // 모든 후보를 chain 으로 보존 — char 단위 fallback 에 사용.
                 // 후보와 glyph 선택은 opt-in font decision trace도 그대로 사용한다.
-                let (_, typeface_chain) = text_typeface_candidates(
+                let (_, typeface_chain) = text_typeface_candidates_for_source(
                     self.font_mgr,
                     self.system_families,
                     self.custom_typefaces,
                     self.bundled_typefaces,
                     &crate::renderer::native_font_family_for_style(style),
                     font_style,
+                    style.source_font_is_ttf,
                 );
                 let hft_outline_family = (self.hft_outline_enabled
                     && crate::renderer::hft_outline::supports_style(style))
@@ -105,7 +107,7 @@ impl SkiaTextReplay<'_> {
                         .or_else(|| {
                             match_supplied_family(self.bundled_typefaces, family, font_style)
                         })?;
-                    Some(face.family_name())
+                    Some((family.to_owned(), face.family_name()))
                 })
                 .flatten();
                 // 같은 family의 한글·영문 CFF는 서로 다른 Typeface일 수 있다.
@@ -114,17 +116,18 @@ impl SkiaTextReplay<'_> {
                 let hft_outlines = std::cell::RefCell::new(std::collections::HashMap::new());
                 let draw_hft_outline =
                     |canvas: &Canvas, text: &str, font: &Font, origin, paint: &Paint| {
-                        let Some(family) = hft_outline_family.as_ref() else {
+                        let Some((requested_family, primary_family)) = hft_outline_family.as_ref()
+                        else {
                             return false;
                         };
                         let face = font.typeface();
-                        if !face.family_name().eq_ignore_ascii_case(family) {
-                            return false;
-                        }
                         let mut outlines = hft_outlines.borrow_mut();
-                        let outline = outlines
-                            .entry(face.unique_id())
-                            .or_insert_with(|| super::hft_outline::HftOutlineReplay::new(&face));
+                        let outline = outlines.entry(face.unique_id()).or_insert_with(|| {
+                            (face.family_name().eq_ignore_ascii_case(primary_family)
+                                || typeface_declares_family(&face, requested_family))
+                            .then(|| super::hft_outline::HftOutlineReplay::new(&face))
+                            .flatten()
+                        });
                         outline
                             .as_ref()
                             .is_some_and(|outline| outline.draw(canvas, text, font, origin, paint))
@@ -133,13 +136,14 @@ impl SkiaTextReplay<'_> {
                     if let Some(family) =
                         crate::renderer::measured_glyph_supplier::family(style, sample)
                     {
-                        let (_, chain) = text_typeface_candidates(
+                        let (_, chain) = text_typeface_candidates_for_source(
                             self.font_mgr,
                             self.system_families,
                             self.custom_typefaces,
                             self.bundled_typefaces,
                             family,
                             font_style,
+                            style.source_font_is_ttf,
                         );
                         return fonts::for_text(
                             &chain,

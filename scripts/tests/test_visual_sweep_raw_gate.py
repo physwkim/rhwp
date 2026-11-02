@@ -143,6 +143,15 @@ class RawGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             pairs = [(1, root / "a", root / "b"), (2, root / "c", root / "d")]
+            for _, rhwp, pdf in pairs:
+                rhwp.write_bytes(b"rhwp")
+                pdf.write_bytes(b"pdf")
+            for (page, details, _), (_, rhwp, pdf) in zip(cases, pairs):
+                cases[page - 1] = (page, details, {
+                    "page": page,
+                    "rhwp_sha256": SWEEP.sha256_file(rhwp),
+                    "pdf_sha256": SWEEP.sha256_file(pdf),
+                })
             with patch.object(SWEEP, "ordered_page_map", return_value=iter(cases)):
                 manifest = SWEEP.write_silhouette_tsv(pairs, root, "rounding")
             with (root / "silhouette.tsv").open(encoding="utf-8") as stream:

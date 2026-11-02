@@ -4433,6 +4433,23 @@ pub(crate) fn compute_image_crop_src(
     img_h_px: f64,
 ) -> (f64, f64, f64, f64) {
     let (cl, ct, cr, cb) = crop_hu;
+    // 원본 좌표가 전체 영역과 같다면 실수 환산 오차로 잘림으로 판정하지 않는다.
+    // 실제 가장자리 자르기는 원본 단위에서 구별해 그대로 환산한다.
+    if let Some((width, height)) = crop_reference_size {
+        if width > 0
+            && height > 0
+            && img_w_px.is_finite()
+            && img_w_px > 0.0
+            && img_h_px.is_finite()
+            && img_h_px > 0.0
+            && cl == 0
+            && ct == 0
+            && i64::from(cr) == i64::from(width)
+            && i64::from(cb) == i64::from(height)
+        {
+            return (0.0, 0.0, img_w_px, img_h_px);
+        }
+    }
     const HU_PER_PX: f64 = 75.0;
     let (scale_x, scale_y) = crop_reference_size
         .filter(|(w, h)| *w > 0 && *h > 0 && img_w_px > 0.0 && img_h_px > 0.0)

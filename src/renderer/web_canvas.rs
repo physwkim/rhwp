@@ -3320,7 +3320,7 @@ impl Renderer for WebCanvasRenderer {
             {
                 return;
             }
-            let _quality = image_reduction::ReductionQuality::for_full_image(
+            let _quality = image_reduction::ReductionQuality::for_source_window(
                 &self.ctx,
                 f64::from(canvas.width()),
                 f64::from(canvas.height()),
@@ -3345,7 +3345,7 @@ impl Renderer for WebCanvasRenderer {
 
         if let Some(img) = cached {
             if img.complete() && img.natural_width() > 0 {
-                let _quality = image_reduction::ReductionQuality::for_full_image(
+                let _quality = image_reduction::ReductionQuality::for_source_window(
                     &self.ctx,
                     f64::from(img.natural_width()),
                     f64::from(img.natural_height()),
@@ -3413,7 +3413,7 @@ impl Renderer for WebCanvasRenderer {
 
             // 이미지가 즉시 사용 가능하면 그리기
             if img.complete() && img.natural_width() > 0 {
-                let _quality = image_reduction::ReductionQuality::for_full_image(
+                let _quality = image_reduction::ReductionQuality::for_source_window(
                     &self.ctx,
                     f64::from(img.natural_width()),
                     f64::from(img.natural_height()),
@@ -3492,6 +3492,10 @@ impl WebCanvasRenderer {
             }
         }
         let _sampling = self.image_sampling_scope(data, Some((sw, sh)), dw, dh);
+        // 선택한 원본 창을 유지한 채 전체 그림과 같은 축소 품질을 사용한다.
+        let quality_context = self.ctx.clone();
+        let _quality =
+            image_reduction::ReductionQuality::for_source_window(&quality_context, sw, sh, dw, dh);
         let key = hash_bytes(data);
 
         let decoded = cached_decoded_image_canvas(data, key);

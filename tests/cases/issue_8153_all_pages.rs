@@ -81,7 +81,7 @@ fn verify(data: &str) {
         let tolerance = if page.page == 130 { 2.0 } else { 1.0 };
         match &page.anchor {
             Anchor::Text { text, x, baseline } => {
-                let runs: Vec<_> = nodes
+                let mut runs: Vec<_> = nodes
                     .iter()
                     .filter_map(|n| match &n.node_type {
                         RenderNodeType::TextRun(run) if run.text.trim() == text.as_str() => {
@@ -90,6 +90,34 @@ fn verify(data: &str) {
                         _ => None,
                     })
                     .collect();
+                if runs.is_empty() {
+                    // 글꼴 슬롯이 달라도 같은 물리 줄의 연속 텍스트라면 한 원문이다.
+                    // 각 런을 이어 독립 Print의 기준 문구와 일치시킨 뒤 첫 글자의 원점을 잰다.
+                    for line in nodes
+                        .iter()
+                        .filter(|node| matches!(node.node_type, RenderNodeType::TextLine(_)))
+                    {
+                        let mut content = String::new();
+                        let mut first = None;
+                        for child in &line.children {
+                            if let RenderNodeType::TextRun(run) = &child.node_type {
+                                if first.is_none() && !run.text.trim().is_empty() {
+                                    first = Some((child, run));
+                                }
+                                content.push_str(&run.text);
+                            } else if !content.trim().is_empty() {
+                                // 텍스트 사이의 다른 개체는 서로 다른 내용을 이어 붙이지 않는다.
+                                first = None;
+                                break;
+                            }
+                        }
+                        if content.trim_start().starts_with(text.as_str()) {
+                            if let Some(first) = first {
+                                runs.push(first);
+                            }
+                        }
+                    }
+                }
                 if runs.len() != 1 {
                     errors.push(format!(
                         "{}쪽 원문 누락·중복({}): {text}",
